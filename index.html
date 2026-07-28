@@ -1,1 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Ledger — Trip & Expense Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;0,700;1,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --paper: #FBF7F1;
+    --paper-alt: #F3ECE0;
+    --ink: #1E2749;
+    --ink-soft: #4A5178;
+    --coral: #FF6B5B;
+    --coral-dark: #E14F40;
+    --teal: #12877D;
+    --teal-dark: #0B6B62;
+    --gold: #F5A623;
+    --purple: #7C5CBF;
+    --line: #E4DCD0;
+    --white: #FFFFFF;
+    --danger: #D64550;
+    --radius: 18px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--paper);
+    color: var(--ink);
+    font-family:'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: 40px;
+  }
+  h1,h2,h3{
+    font-family:'Fraunces', Georgia, serif;
+    margin: 0 0 4px 0;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  .mono{font-family:'JetBrains Mono', monospace;}
+  .app{max-width: 760px; margin: 0 auto; padding: 0 16px;}
+
+  /* ---------- Header ---------- */
+  header.top{
+    padding: 22px 16px 14px;
+    max-width: 760px;
+    margin: 0 auto;
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:12px;
+  }
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand .mark{
+    width:40px;height:40px;border-radius:11px;
+    background: linear-gradient(155deg, var(--coral), var(--gold));
+    display:flex;align-items:center;justify-content:center;
+    font-size:20px; flex-shrink:0;
+    box-shadow: 0 4px 10px rgba(255,107,91,0.35);
+  }
+  .brand h1{font-size:24px; font-style:italic; font-weight:700;}
+  .brand p{margin:0; font-size:12px; color:var(--ink-soft); font-weight:500;}
+
+  /* ---------- Sync Badge ---------- */
+  .sync-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--paper-alt);
+    color: var(--ink-soft);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .sync-badge:active{ opacity:.8; }
+  .sync-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--teal);
+  }
+  .sync-dot.local{ background: var(--gold); }
+
+  /* ---------- Tabs ---------- */
+  nav.tabs{
+    position: sticky; top:0; z-index: 50;
+    background: var(--paper);
+    padding: 6px 16px 12px;
+    display:flex; gap:8px; overflow-x:auto;
+    max-width:760px; margin:0 auto;
+    scrollbar-width:none;
+  }
+  nav.tabs::-webkit-scrollbar{display:none;}
+  nav.tabs button{
+    flex-shrink:0;
+    border:none; cursor:pointer;
+    padding: 9px 16px;
+    border-radius: 999px;
+    font-family:'Inter'; font-weight:600; font-size: 13.5px;
+    background: var(--white);
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+    transition: all .18s ease;
+  }
+  nav.tabs button.active{
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+
+  section.view{display:none; animation: fade .25s ease;}
+  section.view.active{display:block;}
+  @keyframes fade{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);}}
+
+  /* ---------- Cards / generic ---------- */
+  .card{
+    background: var(--white);
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    padding: 18px;
+  }
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .stack{display:flex; flex-direction:column; gap:14px;}
+
+  /* ---------- Overview stat tiles ---------- */
+  .stat-row{display:grid; grid-template-columns: repeat(2,1fr); gap:12px; margin-bottom:14px;}
+  .stat{
+    border-radius: var(--radius);
+    padding: 16px 16px 14px;
+    color: var(--white);
+    position:relative;
+    overflow:hidden;
+  }
+  .stat .label{font-size:12px; opacity:.85; font-weight:600; text-transform:uppercase; letter-spacing:.04em;}
+  .stat .value{font-family:'JetBrains Mono'; font-size: 25px; font-weight:700; margin-top:6px;}
+  .stat.ink{background: linear-gradient(150deg,#1E2749,#323B66);}
+  .stat.coral{background: linear-gradient(150deg,var(--coral),var(--coral-dark));}
+
+  .section-head{display:flex; align-items:baseline; justify-content:space-between; margin: 22px 0 10px;}
+  .section-head h2{font-size:19px;}
+  .section-head a.link{font-size:13px; color:var(--teal); font-weight:600; cursor:pointer; text-decoration:none;}
+
+  /* ---------- Ticket-stub expense row ---------- */
+  .ticket{
+    display:flex; align-items:center; gap:12px;
+    background: var(--white);
+    border:1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 9px;
+    position: relative;
+  }
+  .ticket .icon{
+    width:38px;height:38px; border-radius:10px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:18px; flex-shrink:0;
+  }
+  .ticket .mid{flex:1; min-width:0;}
+  .ticket .mid .cat{font-weight:600; font-size:14.5px;}
+  .ticket .mid .note{font-size:12px; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .ticket .leader{
+    flex:1; border-bottom: 2px dotted var(--line); margin: 0 2px; min-width:8px;
+  }
+  .ticket .amt{font-family:'JetBrains Mono'; font-weight:700; font-size:15px; flex-shrink:0;}
+  .ticket .del{
+    background:none;border:none;cursor:pointer;color:#C9C2B4;
+    font-size:16px; padding:2px 4px; flex-shrink:0;
+  }
+  .ticket .del:hover{color: var(--danger);}
+
+  .empty{
+    text-align:center; padding: 34px 20px; color: var(--ink-soft);
+    border: 1.5px dashed var(--line); border-radius: var(--radius);
+    font-size: 14px;
+  }
+  .empty .big{font-size:30px; display:block; margin-bottom:8px;}
+
+  /* ---------- Boarding pass trip card ---------- */
+  .pass{
+    background: var(--white);
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    margin-bottom: 16px;
+    overflow:visible;
+    position:relative;
+    cursor:pointer;
+    transition: transform .15s ease;
+  }
+  .pass:active{transform: scale(0.99);}
+  .pass-top{
+    display:flex; align-items:center; gap:12px;
+    padding: 16px 16px 14px;
+  }
+  .pass-top .emoji{
+    width:44px;height:44px;border-radius:12px;
+    background: linear-gradient(150deg, var(--purple), #9C86E0);
+    display:flex;align-items:center;justify-content:center;
+    font-size:21px; flex-shrink:0; color:white;
+  }
+  .pass-top .name{font-size:16.5px; font-weight:700; font-family:'Fraunces';}
+  .pass-top .dates{font-size:12px; color:var(--ink-soft); margin-top:1px;}
+  .perforation{
+    position:relative;
+    height:0;
+    border-top: 2px dashed var(--line);
+    margin: 0 0;
+  }
+  .perforation::before, .perforation::after{
+    content:''; position:absolute; top:-9px;
+    width:18px;height:18px;border-radius:50%;
+    background: var(--paper);
+    border: 1px solid var(--line);
+  }
+  .perforation::before{left:-9px;}
+  .perforation::after{right:-9px;}
+  .pass-bottom{padding: 14px 16px 16px;}
+  .pass-bottom .row{display:flex; justify-content:space-between; font-size:12.5px; color:var(--ink-soft); margin-bottom:6px;}
+  .pass-bottom .row b{color:var(--ink); font-family:'JetBrains Mono';}
+  .bar-track{height:8px; border-radius:99px; background: var(--paper-alt); overflow:hidden;}
+  .bar-fill{height:100%; border-radius:99px; background: linear-gradient(90deg, var(--teal), #1BB3A6);}
+  .bar-fill.over{background: linear-gradient(90deg, var(--coral), var(--coral-dark));}
+
+  /* ---------- Forms ---------- */
+  label{font-size:12.5px; font-weight:600; color:var(--ink-soft); display:block; margin: 12px 0 5px;}
+  label:first-of-type{margin-top:0;}
+  input, select{
+    width:100%; padding: 11px 12px;
+    border-radius: 11px; border: 1.5px solid var(--line);
+    font-family:'Inter'; font-size: 14.5px; background: var(--paper);
+    color: var(--ink);
+  }
+  input:focus, select:focus{
+    outline: none; border-color: var(--teal);
+    background: white;
+  }
+  .cat-picker{display:flex; flex-wrap:wrap; gap:8px;}
+  .cat-chip{
+    padding:8px 12px; border-radius:11px; border:1.5px solid var(--line);
+    background:var(--paper); font-size:13px; font-weight:600; cursor:pointer;
+    display:flex; align-items:center; gap:6px;
+  }
+  .cat-chip.sel{border-color: var(--ink); background: var(--ink); color:var(--paper);}
+  .emoji-picker{display:flex; flex-wrap:wrap; gap:8px;}
+  .emoji-opt{
+    width:42px;height:42px; border-radius:11px; border:1.5px solid var(--line);
+    background:var(--paper); font-size:19px; cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .emoji-opt.sel{border-color:var(--purple); background:#F1ECFA;}
+
+  button.primary{
+    width:100%; padding: 14px; border:none; border-radius: 13px;
+    background: var(--ink); color: var(--paper);
+    font-family:'Inter'; font-weight:700; font-size:15px; cursor:pointer;
+    margin-top: 18px;
+  }
+  button.primary:active{opacity:.85;}
+  button.ghost{
+    padding: 10px 16px; border-radius:11px; border:1.5px solid var(--line);
+    background:transparent; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink);
+  }
+
+  .filter-row{display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;}
+  .filter-row select{width:auto; flex:1; min-width:120px;}
+
+  .chart-box{background:white; border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:16px;}
+  .chart-box h3{font-size:14px; margin-bottom:12px; color:var(--ink-soft); font-family:'Inter'; font-weight:700; text-transform:uppercase; letter-spacing:.03em;}
+  canvas{max-height:260px;}
+
+  .modal-overlay{
+    display:none; position:fixed; inset:0; background:rgba(30,39,73,0.45);
+    z-index:100; align-items:flex-end; justify-content:center;
+  }
+  .modal-overlay.active{display:flex;}
+  .modal{
+    background: var(--paper); width:100%; max-width:760px;
+    border-radius: 22px 22px 0 0; padding: 22px 18px 26px;
+    max-height:88vh; overflow-y:auto;
+    animation: slideup .25s ease;
+  }
+  @keyframes slideup{from{transform:translateY(40px); opacity:0;} to{transform:translateY(0); opacity:1;}}
+  .modal-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+  .modal-head button{background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-soft);}
+
+  .fab{
+    position: fixed; bottom: 22px; right: 22px;
+    width:58px;height:58px; border-radius:50%;
+    background: linear-gradient(150deg, var(--coral), var(--coral-dark));
+    color:white; font-size:28px; border:none; cursor:pointer;
+    box-shadow: 0 8px 20px rgba(255,107,91,0.45);
+    z-index: 40; display:flex; align-items:center; justify-content:center;
+  }
+
+  .toast{
+    position:fixed; bottom: 90px; left:50%; transform:translateX(-50%) translateY(20px);
+    background: var(--ink); color:var(--paper); padding: 11px 20px; border-radius: 999px;
+    font-size:13.5px; font-weight:600; opacity:0; transition: all .25s ease; z-index:200;
+    pointer-events:none; white-space:nowrap;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  @media (max-width:420px){
+    .stat .value{font-size:21px;}
+    .grid2{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div class="mark">✈️</div>
+    <div>
+      <h1>Ledger</h1>
+      <p>your trips & spends, sorted</p>
+    </div>
+  </div>
+  <button class="sync-badge" id="sync-badge" onclick="openAccountModal()">
+    <span class="sync-dot local" id="sync-dot"></span> <span id="sync-label">On this device</span>
+  </button>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="overview" onclick="switchTab('overview')">Overview</button>
+  <button class="tab-btn" data-tab="trips" onclick="switchTab('trips')">Trips</button>
+  <button class="tab-btn" data-tab="expenses" onclick="switchTab('expenses')">Expenses</button>
+  <button class="tab-btn" data-tab="analysis" onclick="switchTab('analysis')">Analysis</button>
+</nav>
+
+<div class="app">
+
+  <!-- OVERVIEW -->
+  <section class="view active" id="view-overview">
+    <div class="stat-row">
+      <div class="stat ink">
+        <div class="label">Total spent</div>
+        <div class="value mono" id="stat-total">₹0</div>
+      </div>
+      <div class="stat coral">
+        <div class="label">This month</div>
+        <div class="value mono" id="stat-month">₹0</div>
+      </div>
+    </div>
+
+    <div class="section-head">
+      <h2>Active trips</h2>
+      <a class="link" onclick="switchTab('trips')">See all →</a>
+    </div>
+    <div id="overview-trips"></div>
+
+    <div class="section-head">
+      <h2>Recent expenses</h2>
+      <a class="link" onclick="switchTab('expenses')">See all →</a>
+    </div>
+    <div id="overview-recent"></div>
+  </section>
+
+  <!-- TRIPS -->
+  <section class="view" id="view-trips">
+    <div class="section-head" style="margin-top:6px;">
+      <h2>Your trips</h2>
+      <a class="link" onclick="openTripModal()">+ New trip</a>
+    </div>
+    <div id="trips-list"></div>
+  </section>
+
+  <!-- EXPENSES -->
+  <section class="view" id="view-expenses">
+    <div class="section-head" style="margin-top:6px;">
+      <h2>All expenses</h2>
+    </div>
+    <div class="filter-row">
+      <select id="filter-trip" onchange="renderExpensesList()"></select>
+      <select id="filter-cat" onchange="renderExpensesList()"></select>
+    </div>
+    <div id="expenses-list"></div>
+  </section>
+
+  <!-- ANALYSIS -->
+  <section class="view" id="view-analysis">
+    <div class="section-head" style="margin-top:6px;">
+      <h2>Analysis</h2>
+    </div>
+    <div class="chart-box">
+      <h3>Spending by category</h3>
+      <canvas id="chart-category"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>Spending by month</h3>
+      <canvas id="chart-month"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>Trip comparison</h3>
+      <canvas id="chart-trips"></canvas>
+    </div>
+  </section>
+
+</div>
+
+<button class="fab" onclick="openExpenseModal()">+</button>
+<div class="toast" id="toast"></div>
+
+<!-- EXPENSE MODAL -->
+<div class="modal-overlay" id="expense-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 style="font-size:19px;">Add expense</h2>
+      <button onclick="closeModal('expense-modal')">✕</button>
+    </div>
+    <label>Amount (₹)</label>
+    <input type="number" inputmode="decimal" id="exp-amount" placeholder="0.00">
+
+    <label>Category</label>
+    <div class="cat-picker" id="exp-cat-picker"></div>
+
+    <label>Note</label>
+    <input type="text" id="exp-note" placeholder="e.g. Rickshaw to hostel">
+
+    <label>Date</label>
+    <input type="date" id="exp-date">
+
+    <label>Trip</label>
+    <select id="exp-trip"></select>
+
+    <button class="primary" onclick="saveExpense()">Save expense</button>
+  </div>
+</div>
+
+<!-- TRIP MODAL -->
+<div class="modal-overlay" id="trip-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 style="font-size:19px;">New trip</h2>
+      <button onclick="closeModal('trip-modal')">✕</button>
+    </div>
+    <label>Trip name</label>
+    <input type="text" id="trip-name" placeholder="e.g. Manali with friends">
+
+    <label>Icon</label>
+    <div class="emoji-picker" id="trip-emoji-picker"></div>
+
+    <label>Start date</label>
+    <input type="date" id="trip-start">
+
+    <label>End date</label>
+    <input type="date" id="trip-end">
+
+    <label>Budget (₹, optional)</label>
+    <input type="number" inputmode="decimal" id="trip-budget" placeholder="e.g. 5000">
+
+    <button class="primary" onclick="saveTrip()">Create trip</button>
+  </div>
+</div>
+
+<!-- ACCOUNT MODAL -->
+<div class="modal-overlay" id="account-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 style="font-size:19px;">Account</h2>
+      <button onclick="closeModal('account-modal')">✕</button>
+    </div>
+
+    <div id="account-signed-out">
+      <p style="font-size:13.5px; color:var(--ink-soft); margin:0 0 14px;">
+        Everything you add is saved on this device right now. Sign in to back it up and sync across your devices.
+      </p>
+
+      <!-- GOOGLE SIGN-IN BUTTON -->
+      <button class="ghost" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:14px; font-weight:600; border-color:#C9C2B4;" onclick="handleGoogleSignIn()">
+        <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.616z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+        Continue with Google
+      </button>
+
+      <div style="text-align:center; font-size:12px; color:var(--ink-soft); margin-bottom:14px; position:relative;">
+        <span style="background:var(--paper); padding:0 8px; z-index:1; position:relative;">or email</span>
+        <div style="border-top:1px solid var(--line); position:absolute; top:50%; width:100%; left:0;"></div>
+      </div>
+
+      <div id="auth-tabs" style="display:flex; gap:8px; margin-bottom:14px;">
+        <button type="button" class="ghost" id="auth-tab-signin" onclick="setAuthMode('signin')" style="flex:1;">Sign in</button>
+        <button type="button" class="ghost" id="auth-tab-signup" onclick="setAuthMode('signup')" style="flex:1;">Create account</button>
+      </div>
+      <label>Email</label>
+      <input type="email" id="auth-email" placeholder="you@example.com" autocomplete="email">
+      <label>Password</label>
+      <input type="password" id="auth-password" placeholder="At least 6 characters" autocomplete="current-password">
+      <div id="auth-error" style="color:var(--danger); font-size:12.5px; margin-top:8px; min-height:16px;"></div>
+      <button class="primary" id="auth-submit" onclick="submitAuth()">Sign in</button>
+      <button class="ghost" style="width:100%; margin-top:10px;" onclick="closeModal('account-modal')">Continue without an account</button>
+    </div>
+
+    <div id="account-signed-in" style="display:none;">
+      <p style="font-size:14px; margin:0 0 4px;">Signed in as</p>
+      <p style="font-weight:700; font-size:15.5px; margin:0 0 14px;" id="account-email"></p>
+      <p style="font-size:13px; color:var(--ink-soft); margin:0 0 16px;">Your trips and expenses sync automatically across every device you sign into.</p>
+      <button class="ghost" style="width:100%;" onclick="handleSignOut()">Sign out</button>
+    </div>
+  </div>
+</div>
+
+<!-- FIREBASE SDKs & APP LOGIC -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+// Firebase Configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyAwoHqdUK-1YT9sfEzGS0yodTQxaP7A4Y0",
+  authDomain: "manager-7c2cd.firebaseapp.com",
+  projectId: "manager-7c2cd",
+  storageBucket: "manager-7c2cd.firebasestorage.app",
+  messagingSenderId: "1033564329736",
+  appId: "1:1033564329736:web:88307eda8b57cb4fdffebd",
+  measurementId: "G-ZK6T1HH8YY"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+/* ================= STATE ================= */
+window.state = {
+  trips: [],
+  expenses: []
+};
+let selectedCat = null;
+let selectedEmoji = '✈️';
+let charts = {};
+let currentUser = null;
+let dataSource = 'local';
+let unsubTrips = null;
+let unsubExpenses = null;
+let authMode = 'signin';
+
+const LOCAL_TRIPS_KEY = 'ledger_trips_v1';
+const LOCAL_EXPENSES_KEY = 'ledger_expenses_v1';
+
+const CATEGORIES = [
+  {key:'food', label:'Food', emoji:'🍔', color:'#FF6B5B'},
+  {key:'transport', label:'Transport', emoji:'🚌', color:'#F5A623'},
+  {key:'stay', label:'Stay', emoji:'🏨', color:'#7C5CBF'},
+  {key:'shopping', label:'Shopping', emoji:'🛍️', color:'#E966A0'},
+  {key:'fun', label:'Fun', emoji:'🎉', color:'#12877D'},
+  {key:'study', label:'Study', emoji:'📚', color:'#3A6EA5'},
+  {key:'health', label:'Health', emoji:'⚕️', color:'#D64550'},
+  {key:'other', label:'Other', emoji:'🧾', color:'#8A8471'}
+];
+const TRIP_EMOJIS = ['✈️','🏖️','⛰️','🚗','🎒','🌆','🏕️','🚆'];
+
+function catInfo(key){ return CATEGORIES.find(c=>c.key===key) || CATEGORIES[CATEGORIES.length-1]; }
+function fmt(n){ return '₹' + Number(n||0).toLocaleString('en-IN', {maximumFractionDigits:0}); }
+function todayStr(){
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function genId(){ return 'local_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,9); }
+
+/* ================= LOCAL STORAGE ================= */
+function loadLocalState(){
+  try{
+    window.state.trips = JSON.parse(localStorage.getItem(LOCAL_TRIPS_KEY) || '[]');
+    window.state.expenses = JSON.parse(localStorage.getItem(LOCAL_EXPENSES_KEY) || '[]');
+  }catch(e){
+    window.state.trips = [];
+    window.state.expenses = [];
+  }
+  window.state.expenses.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+}
+function saveLocalTrips(){ localStorage.setItem(LOCAL_TRIPS_KEY, JSON.stringify(window.state.trips)); }
+function saveLocalExpenses(){ localStorage.setItem(LOCAL_EXPENSES_KEY, JSON.stringify(window.state.expenses)); }
+
+/* ================= FIREBASE AUTH & SYNC ================= */
+function attachCloudListeners(uid){
+  unsubTrips = onSnapshot(collection(db, "users", uid, "trips"), (snapshot) => {
+    window.state.trips = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    refreshCurrentTab();
+  });
+  unsubExpenses = onSnapshot(collection(db, "users", uid, "expenses"), (snapshot) => {
+    window.state.expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    window.state.expenses.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+    refreshCurrentTab();
+  });
+}
+function detachCloudListeners(){
+  if(unsubTrips){ unsubTrips(); unsubTrips = null; }
+  if(unsubExpenses){ unsubExpenses(); unsubExpenses = null; }
+}
+async function migrateLocalDataToCloud(uid){
+  const flag = 'ledger_migrated_' + uid;
+  if(localStorage.getItem(flag)) return;
+  let localTrips = [], localExpenses = [];
+  try{
+    localTrips = JSON.parse(localStorage.getItem(LOCAL_TRIPS_KEY) || '[]');
+    localExpenses = JSON.parse(localStorage.getItem(LOCAL_EXPENSES_KEY) || '[]');
+  }catch(e){ /* empty */ }
+
+  if(localTrips.length === 0 && localExpenses.length === 0){
+    localStorage.setItem(flag, '1');
+    return;
+  }
+  try{
+    showToast('Syncing local data…');
+    const idMap = {};
+    for(const t of localTrips){
+      const ref = await addDoc(collection(db, "users", uid, "trips"), {
+        name: t.name, icon: t.icon, start: t.start || '', end: t.end || '', budget: t.budget || 0
+      });
+      idMap[t.id] = ref.id;
+    }
+    for(const e of localExpenses){
+      await addDoc(collection(db, "users", uid, "expenses"), {
+        amount: e.amount, category: e.category, note: e.note || '', date: e.date || '',
+        tripId: e.tripId ? (idMap[e.tripId] || null) : null
+      });
+    }
+    localStorage.setItem(flag, '1');
+    localStorage.removeItem(LOCAL_TRIPS_KEY);
+    localStorage.removeItem(LOCAL_EXPENSES_KEY);
+    showToast('Local data synced to account');
+  }catch(err){
+    showToast('Could not sync local data');
+  }
+}
+function updateSyncBadge(){
+  const dot = document.getElementById('sync-dot');
+  const label = document.getElementById('sync-label');
+  if(currentUser){
+    dot.classList.remove('local');
+    label.textContent = currentUser.email ? currentUser.email.split('@')[0] + ' · synced' : 'Synced';
+  } else {
+    dot.classList.add('local');
+    label.textContent = 'On this device';
+  }
+}
+function updateAccountModalView(){
+  const signedOut = document.getElementById('account-signed-out');
+  const signedIn = document.getElementById('account-signed-in');
+  if(currentUser){
+    signedOut.style.display = 'none';
+    signedIn.style.display = 'block';
+    document.getElementById('account-email').textContent = currentUser.email || 'Google User';
+  } else {
+    signedOut.style.display = 'block';
+    signedIn.style.display = 'none';
+  }
+}
+
+onAuthStateChanged(auth, async (user) => {
+  detachCloudListeners();
+  if(user){
+    currentUser = user;
+    dataSource = 'cloud';
+    await migrateLocalDataToCloud(user.uid);
+    attachCloudListeners(user.uid);
+  } else {
+    currentUser = null;
+    dataSource = 'local';
+    loadLocalState();
+    refreshCurrentTab();
+  }
+  updateSyncBadge();
+  updateAccountModalView();
+});
+
+window.openAccountModal = function(){
+  document.getElementById('auth-error').textContent = '';
+  setAuthMode('signin');
+  updateAccountModalView();
+  document.getElementById('account-modal').classList.add('active');
+}
+window.setAuthMode = function(mode){
+  authMode = mode;
+  document.getElementById('auth-tab-signin').style.background = mode==='signin' ? 'var(--ink)' : 'transparent';
+  document.getElementById('auth-tab-signin').style.color = mode==='signin' ? 'var(--paper)' : 'var(--ink)';
+  document.getElementById('auth-tab-signup').style.background = mode==='signup' ? 'var(--ink)' : 'transparent';
+  document.getElementById('auth-tab-signup').style.color = mode==='signup' ? 'var(--paper)' : 'var(--ink)';
+  document.getElementById('auth-submit').textContent = mode==='signin' ? 'Sign in' : 'Create account';
+  document.getElementById('auth-password').setAttribute('autocomplete', mode==='signin' ? 'current-password' : 'new-password');
+  document.getElementById('auth-error').textContent = '';
+}
+
+window.handleGoogleSignIn = async function(){
+  const provider = new GoogleAuthProvider();
+  try {
+    await signInWithPopup(auth, provider);
+    closeModal('account-modal');
+    showToast('Signed in with Google');
+  } catch(err) {
+    document.getElementById('auth-error').textContent = friendlyAuthError(err);
+  }
+}
+
+window.submitAuth = async function(){
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const errBox = document.getElementById('auth-error');
+  errBox.textContent = '';
+  if(!email || !password){ errBox.textContent = 'Enter an email and password.'; return; }
+  if(password.length < 6){ errBox.textContent = 'Password must be at least 6 characters.'; return; }
+  try{
+    if(authMode === 'signin'){
+      await signInWithEmailAndPassword(auth, email, password);
+    } else {
+      await createUserWithEmailAndPassword(auth, email, password);
+    }
+    closeModal('account-modal');
+    showToast(authMode === 'signin' ? 'Signed in' : 'Account created');
+  }catch(err){
+    errBox.textContent = friendlyAuthError(err);
+  }
+}
+window.handleSignOut = async function(){
+  try{
+    await signOut(auth);
+    closeModal('account-modal');
+    showToast('Signed out');
+  }catch(err){
+    showToast('Error signing out');
+  }
+}
+function friendlyAuthError(err){
+  const code = err && err.code || '';
+  if(code.includes('email-already-in-use')) return 'Email already in use — sign in instead.';
+  if(code.includes('invalid-email')) return 'Invalid email address.';
+  if(code.includes('user-not-found') || code.includes('invalid-credential') || code.includes('wrong-password')) return 'Incorrect email or password.';
+  if(code.includes('popup-closed-by-user')) return 'Google Sign-In canceled.';
+  return 'Authentication error. Please try again.';
+}
+
+/* ================= TABS ================= */
+window.switchTab = function(tab){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+tab).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  if(tab==='overview') renderOverview();
+  if(tab==='trips') renderTripsList();
+  if(tab==='expenses') renderExpensesList();
+  if(tab==='analysis') renderAnalysis();
+}
+
+/* ================= MODALS ================= */
+window.openExpenseModal = function(){
+  document.getElementById('exp-amount').value = '';
+  document.getElementById('exp-note').value = '';
+  document.getElementById('exp-date').value = todayStr();
+  selectedCat = null;
+  renderCatPicker();
+  populateTripSelect(document.getElementById('exp-trip'));
+  document.getElementById('expense-modal').classList.add('active');
+}
+window.openTripModal = function(){
+  document.getElementById('trip-name').value = '';
+  document.getElementById('trip-start').value = todayStr();
+  document.getElementById('trip-end').value = '';
+  document.getElementById('trip-budget').value = '';
+  selectedEmoji = TRIP_EMOJIS[0];
+  renderEmojiPicker();
+  document.getElementById('trip-modal').classList.add('active');
+}
+window.closeModal = function(id){ document.getElementById(id).classList.remove('active'); }
+
+function renderCatPicker(){
+  const box = document.getElementById('exp-cat-picker');
+  box.innerHTML = CATEGORIES.map(c=>
+    `<div class="cat-chip ${selectedCat===c.key?'sel':''}" onclick="pickCat('${c.key}')">${c.emoji} ${c.label}</div>`
+  ).join('');
+}
+window.pickCat = function(key){ selectedCat = key; renderCatPicker(); }
+
+function renderEmojiPicker(){
+  const box = document.getElementById('trip-emoji-picker');
+  box.innerHTML = TRIP_EMOJIS.map(e=>
+    `<div class="emoji-opt ${selectedEmoji===e?'sel':''}" onclick="pickEmoji('${e}')">${e}</div>`
+  ).join('');
+}
+window.pickEmoji = function(e){ selectedEmoji = e; renderEmojiPicker(); }
+
+function populateTripSelect(sel){
+  sel.innerHTML = '<option value="">Personal (no trip)</option>' +
+    window.state.trips.map(t=>`<option value="${t.id}">${t.icon} ${escapeHtml(t.name)}</option>`).join('');
+}
+
+/* ================= ACTIONS ================= */
+window.saveExpense = async function(){
+  const amount = parseFloat(document.getElementById('exp-amount').value);
+  if(!amount || amount<=0){ showToast('Enter a valid amount'); return; }
+  if(!selectedCat){ showToast('Pick a category'); return; }
+  const date = document.getElementById('exp-date').value || todayStr();
+  const note = document.getElementById('exp-note').value.trim();
+  const tripId = document.getElementById('exp-trip').value || null;
+  const payload = { amount, category: selectedCat, note, date, tripId };
+
+  try {
+    if(dataSource === 'cloud' && currentUser){
+      await addDoc(collection(db, "users", currentUser.uid, "expenses"), payload);
+    } else {
+      window.state.expenses.unshift({ id: genId(), ...payload });
+      window.state.expenses.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+      saveLocalExpenses();
+      refreshCurrentTab();
+    }
+    closeModal('expense-modal');
+    showToast('Expense saved');
+  } catch(e) {
+    showToast('Error saving expense');
+  }
+}
+
+window.saveTrip = async function(){
+  const name = document.getElementById('trip-name').value.trim();
+  if(!name){ showToast('Give your trip a name'); return; }
+  const start = document.getElementById('trip-start').value;
+  const end = document.getElementById('trip-end').value;
+  const budget = parseFloat(document.getElementById('trip-budget').value) || 0;
+  const payload = { name, icon: selectedEmoji, start, end, budget };
+
+  try {
+    if(dataSource === 'cloud' && currentUser){
+      await addDoc(collection(db, "users", currentUser.uid, "trips"), payload);
+    } else {
+      window.state.trips.unshift({ id: genId(), ...payload });
+      saveLocalTrips();
+      refreshCurrentTab();
+    }
+    closeModal('trip-modal');
+    showToast('Trip created');
+  } catch(e) {
+    showToast('Error creating trip');
+  }
+}
+
+window.deleteExpense = async function(id){
+  try {
+    if(dataSource === 'cloud' && currentUser){
+      await deleteDoc(doc(db, "users", currentUser.uid, "expenses", id));
+    } else {
+      window.state.expenses = window.state.expenses.filter(e => e.id !== id);
+      saveLocalExpenses();
+      refreshCurrentTab();
+    }
+    showToast('Expense deleted');
+  } catch(e) {
+    showToast('Error deleting expense');
+  }
+}
+
+window.deleteTrip = async function(id){
+  if(!confirm('Delete this trip? Expenses in it will stay as Personal.')) return;
+  try {
+    if(dataSource === 'cloud' && currentUser){
+      const uid = currentUser.uid;
+      const batch = writeBatch(db);
+      batch.delete(doc(db, "users", uid, "trips", id));
+      window.state.expenses.filter(e => e.tripId === id).forEach(e => {
+        batch.update(doc(db, "users", uid, "expenses", e.id), { tripId: null });
+      });
+      await batch.commit();
+    } else {
+      window.state.trips = window.state.trips.filter(t => t.id !== id);
+      window.state.expenses = window.state.expenses.map(e => e.tripId === id ? { ...e, tripId: null } : e);
+      saveLocalTrips();
+      saveLocalExpenses();
+      refreshCurrentTab();
+    }
+    showToast('Trip deleted');
+  } catch(e) {
+    showToast('Error deleting trip');
+  }
+}
+
+function refreshCurrentTab(){
+  const activeBtn = document.querySelector('.tab-btn.active');
+  const active = activeBtn ? activeBtn.dataset.tab : 'overview';
+  switchTab(active);
+}
+
+/* ================= RENDERING ================= */
+function renderOverview(){
+  const total = window.state.expenses.reduce((s,e)=>s+e.amount,0);
+  const month = todayStr().slice(0,7);
+  const monthTotal = window.state.expenses.filter(e=>e.date && e.date.slice(0,7)===month).reduce((s,e)=>s+e.amount,0);
+  document.getElementById('stat-total').textContent = fmt(total);
+  document.getElementById('stat-month').textContent = fmt(monthTotal);
+
+  const tripsBox = document.getElementById('overview-trips');
+  if(window.state.trips.length===0){
+    tripsBox.innerHTML = `<div class="empty"><span class="big">🧳</span>No trips yet. Create one to start grouping expenses.</div>`;
+  } else {
+    tripsBox.innerHTML = window.state.trips.slice(0,2).map(t=>tripCardHtml(t)).join('');
+  }
+
+  const recentBox = document.getElementById('overview-recent');
+  const recent = window.state.expenses.slice(0,5);
+  if(recent.length===0){
+    recentBox.innerHTML = `<div class="empty"><span class="big">🧾</span>No expenses logged yet. Tap + to add one.</div>`;
+  } else {
+    recentBox.innerHTML = recent.map(e=>ticketHtml(e)).join('');
+  }
+}
+
+function tripCardHtml(t){
+  const spent = window.state.expenses.filter(e=>e.tripId===t.id).reduce((s,e)=>s+e.amount,0);
+  const count = window.state.expenses.filter(e=>e.tripId===t.id).length;
+  const pct = t.budget>0 ? Math.min(100,(spent/t.budget)*100) : 0;
+  const over = t.budget>0 && spent>t.budget;
+  const dateStr = (t.start||t.end) ? `${t.start||'?'} → ${t.end||'?'}` : 'No dates set';
+  return `
+    <div class="pass" onclick="viewTripExpenses('${t.id}')">
+      <div class="pass-top">
+        <div class="emoji">${t.icon}</div>
+        <div style="flex:1;">
+          <div class="name">${escapeHtml(t.name)}</div>
+          <div class="dates">${dateStr} · ${count} expense${count===1?'':'s'}</div>
+        </div>
+        <button class="ticket del" style="font-size:18px;" onclick="event.stopPropagation(); deleteTrip('${t.id}')">✕</button>
+      </div>
+      <div class="perforation"></div>
+      <div class="pass-bottom">
+        ${t.budget>0 ? `
+          <div class="row"><span>Spent</span><b>${fmt(spent)} / ${fmt(t.budget)}</b></div>
+          <div class="bar-track"><div class="bar-fill ${over?'over':''}" style="width:${pct}%"></div></div>
+        ` : `<div class="row"><span>Total spent</span><b>${fmt(spent)}</b></div>`}
+      </div>
+    </div>`;
+}
+function renderTripsList(){
+  const box = document.getElementById('trips-list');
+  if(window.state.trips.length===0){
+    box.innerHTML = `<div class="empty"><span class="big">🧳</span>No trips yet. Tap "New trip" to group your first set of expenses.</div>`;
+    return;
+  }
+  box.innerHTML = window.state.trips.map(t=>tripCardHtml(t)).join('');
+}
+window.viewTripExpenses = function(tripId){
+  switchTab('expenses');
+  document.getElementById('filter-trip').value = tripId;
+  renderExpensesList();
+}
+
+function ticketHtml(e){
+  const c = catInfo(e.category);
+  const trip = window.state.trips.find(t=>t.id===e.tripId);
+  return `
+    <div class="ticket">
+      <div class="icon" style="background:${c.color}22; color:${c.color};">${c.emoji}</div>
+      <div class="mid">
+        <div class="cat">${c.label}${e.note ? ' · ' : ''}<span style="font-weight:400;">${escapeHtml(e.note||'')}</span></div>
+        <div class="note">${e.date || ''}${trip ? ' · '+trip.icon+' '+escapeHtml(trip.name) : ''}</div>
+      </div>
+      <div class="leader"></div>
+      <div class="amt">${fmt(e.amount)}</div>
+      <button class="del" onclick="deleteExpense('${e.id}')">✕</button>
+    </div>`;
+}
+function populateFilters(){
+  const tripSel = document.getElementById('filter-trip');
+  const curTrip = tripSel.value;
+  tripSel.innerHTML = '<option value="">All trips</option><option value="none">Personal only</option>' +
+    window.state.trips.map(t=>`<option value="${t.id}">${t.icon} ${escapeHtml(t.name)}</option>`).join('');
+  tripSel.value = curTrip || '';
+
+  const catSel = document.getElementById('filter-cat');
+  const curCat = catSel.value;
+  catSel.innerHTML = '<option value="">All categories</option>' +
+    CATEGORIES.map(c=>`<option value="${c.key}">${c.emoji} ${c.label}</option>`).join('');
+  catSel.value = curCat || '';
+}
+window.renderExpensesList = function(){
+  populateFilters();
+  const tripFilter = document.getElementById('filter-trip').value;
+  const catFilter = document.getElementById('filter-cat').value;
+  let list = [...window.state.expenses];
+  if(tripFilter === 'none') list = list.filter(e=>!e.tripId);
+  else if(tripFilter) list = list.filter(e=>e.tripId===tripFilter);
+  if(catFilter) list = list.filter(e=>e.category===catFilter);
+
+  const box = document.getElementById('expenses-list');
+  if(list.length===0){
+    box.innerHTML = `<div class="empty"><span class="big">🔍</span>No expenses match this filter.</div>`;
+    return;
+  }
+  box.innerHTML = list.map(e=>ticketHtml(e)).join('');
+}
+
+/* ================= ANALYSIS CHARTS ================= */
+function destroyChart(key){ if(charts[key]){ charts[key].destroy(); delete charts[key]; } }
+
+function renderAnalysis(){
+  destroyChart('cat');
+  const byCat = CATEGORIES.map(c=>({
+    ...c,
+    total: window.state.expenses.filter(e=>e.category===c.key).reduce((s,e)=>s+e.amount,0)
+  })).filter(c=>c.total>0);
+
+  const ctxCat = document.getElementById('chart-category').getContext('2d');
+  charts.cat = new Chart(ctxCat, {
+    type: 'doughnut',
+    data: {
+      labels: byCat.length ? byCat.map(c=>c.label) : ['No data yet'],
+      datasets: [{
+        data: byCat.length ? byCat.map(c=>c.total) : [1],
+        backgroundColor: byCat.length ? byCat.map(c=>c.color) : ['#E4DCD0'],
+        borderWidth: 3,
+        borderColor: '#FBF7F1'
+      }]
+    },
+    options: {
+      plugins: { legend: { position:'bottom', labels:{ font:{family:'Inter', size:12}, padding:14 } } },
+      cutout: '62%'
+    }
+  });
+
+  destroyChart('month');
+  const monthMap = {};
+  window.state.expenses.forEach(e=>{
+    const m = (e.date||'').slice(0,7) || 'Unknown';
+    monthMap[m] = (monthMap[m]||0) + e.amount;
+  });
+  const months = Object.keys(monthMap).sort();
+  const ctxMonth = document.getElementById('chart-month').getContext('2d');
+  charts.month = new Chart(ctxMonth, {
+    type: 'bar',
+    data: {
+      labels: months.length ? months : ['No data'],
+      datasets: [{
+        data: months.length ? months.map(m=>monthMap[m]) : [0],
+        backgroundColor: '#12877D',
+        borderRadius: 6,
+        maxBarThickness: 42
+      }]
+    },
+    options: {
+      plugins:{legend:{display:false}},
+      scales:{ y:{ beginAtZero:true, grid:{color:'#EFE9DD'} }, x:{ grid:{display:false} } }
+    }
+  });
+
+  destroyChart('trips');
+  const tripTotals = window.state.trips.map(t=>({
+    name: t.icon+' '+t.name,
+    total: window.state.expenses.filter(e=>e.tripId===t.id).reduce((s,e)=>s+e.amount,0)
+  }));
+  const ctxTrips = document.getElementById('chart-trips').getContext('2d');
+  charts.trips = new Chart(ctxTrips, {
+    type: 'bar',
+    data: {
+      labels: tripTotals.length ? tripTotals.map(t=>t.name) : ['No trips yet'],
+      datasets: [{
+        data: tripTotals.length ? tripTotals.map(t=>t.total) : [0],
+        backgroundColor: '#7C5CBF',
+        borderRadius: 6,
+        maxBarThickness: 42
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins:{legend:{display:false}},
+      scales:{ x:{ beginAtZero:true, grid:{color:'#EFE9DD'} }, y:{ grid:{display:false} } }
+    }
+  });
+}
+
+/* ================= UTILS ================= */
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(()=>t.classList.remove('show'), 2000);
+}
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+loadLocalState();
+renderOverview();
+updateSyncBadge();
+</script>
+</body>
+</html>
 
