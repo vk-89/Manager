@@ -731,12 +731,14 @@ window.handleSignOut = async function(){
   }
 }
 function friendlyAuthError(err){
+  console.error("Firebase Auth Error:", err); // Logs raw error to browser console
   const code = err && err.code || '';
+  if(code.includes('unauthorized-domain')) return 'Domain not authorized in Firebase Console.';
   if(code.includes('email-already-in-use')) return 'Email already in use — sign in instead.';
   if(code.includes('invalid-email')) return 'Invalid email address.';
   if(code.includes('user-not-found') || code.includes('invalid-credential') || code.includes('wrong-password')) return 'Incorrect email or password.';
   if(code.includes('popup-closed-by-user')) return 'Google Sign-In canceled.';
-  return 'Authentication error. Please try again.';
+  return 'Authentication error (' + (code || 'unknown') + '). Please try again.';
 }
 
 /* ================= TABS ================= */
@@ -1090,4 +1092,3 @@ updateSyncBadge();
 </script>
 </body>
 </html>
-
