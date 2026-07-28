@@ -88,6 +88,8 @@
     background: var(--teal);
   }
   .sync-dot.local{ background: var(--gold); }
+  .sync-dot.loading{ background: var(--ink-soft); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse{0%,100%{opacity:1;} 50%{opacity:.35;}}
 
   /* ---------- Tabs ---------- */
   nav.tabs{
@@ -175,6 +177,7 @@
     font-size:16px; padding:2px 4px; flex-shrink:0;
   }
   .ticket .del:hover{color: var(--danger);}
+  .ticket .del:disabled{opacity:.4; cursor:not-allowed;}
 
   .empty{
     text-align:center; padding: 34px 20px; color: var(--ink-soft);
@@ -182,6 +185,17 @@
     font-size: 14px;
   }
   .empty .big{font-size:30px; display:block; margin-bottom:8px;}
+
+  /* ---------- Loading skeleton ---------- */
+  .skel{
+    border-radius: 14px; background: linear-gradient(90deg, var(--paper-alt) 25%, #EAE2D3 37%, var(--paper-alt) 63%);
+    background-size: 400% 100%; animation: shimmer 1.4s ease infinite;
+  }
+  @keyframes shimmer{0%{background-position:100% 50%;} 100%{background-position:0 50%;}}
+  #app-loading{padding-top: 6px;}
+  #app-loading .skel-stat{height:78px; margin-bottom:0;}
+  #app-loading .skel-row{height:60px; margin-bottom:9px;}
+  #app-loading .skel-label{height:16px; width:120px; margin: 22px 0 10px;}
 
   /* ---------- Boarding pass trip card ---------- */
   .pass{
@@ -229,10 +243,10 @@
   .bar-fill.over{background: linear-gradient(90deg, var(--coral), var(--coral-dark));}
 
   /* ---------- Forms ---------- */
-  label{font-size:12.5px; font-weight:600; color:var(--ink-soft); display:block; margin: 12px 0 5px;}
+  label{font-size:12.5px; font-weight:600; color:var(--ink-soft); display:block; margin: 10px 0 5px;}
   label:first-of-type{margin-top:0;}
   input, select{
-    width:100%; padding: 11px 12px;
+    width:100%; padding: 10px 12px;
     border-radius: 11px; border: 1.5px solid var(--line);
     font-family:'Inter'; font-size: 14.5px; background: var(--paper);
     color: var(--ink);
@@ -241,11 +255,11 @@
     outline: none; border-color: var(--teal);
     background: white;
   }
-  .cat-picker{display:flex; flex-wrap:wrap; gap:8px;}
+  .cat-picker{display:flex; flex-wrap:wrap; gap:7px;}
   .cat-chip{
-    padding:8px 12px; border-radius:11px; border:1.5px solid var(--line);
-    background:var(--paper); font-size:13px; font-weight:600; cursor:pointer;
-    display:flex; align-items:center; gap:6px;
+    padding:7px 11px; border-radius:11px; border:1.5px solid var(--line);
+    background:var(--paper); font-size:12.5px; font-weight:600; cursor:pointer;
+    display:flex; align-items:center; gap:5px;
   }
   .cat-chip.sel{border-color: var(--ink); background: var(--ink); color:var(--paper);}
   .emoji-picker{display:flex; flex-wrap:wrap; gap:8px;}
@@ -260,13 +274,15 @@
     width:100%; padding: 14px; border:none; border-radius: 13px;
     background: var(--ink); color: var(--paper);
     font-family:'Inter'; font-weight:700; font-size:15px; cursor:pointer;
-    margin-top: 18px;
+    margin-top: 16px;
   }
   button.primary:active{opacity:.85;}
+  button.primary:disabled{opacity:.55; cursor:not-allowed;}
   button.ghost{
     padding: 10px 16px; border-radius:11px; border:1.5px solid var(--line);
     background:transparent; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink);
   }
+  button.ghost:disabled{opacity:.5; cursor:not-allowed;}
 
   .filter-row{display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;}
   .filter-row select{width:auto; flex:1; min-width:120px;}
@@ -277,17 +293,18 @@
 
   .modal-overlay{
     display:none; position:fixed; inset:0; background:rgba(30,39,73,0.45);
-    z-index:100; align-items:flex-end; justify-content:center;
+    z-index:100; align-items:flex-start; justify-content:center;
+    padding-top: 4vh;
   }
   .modal-overlay.active{display:flex;}
   .modal{
     background: var(--paper); width:100%; max-width:760px;
-    border-radius: 22px 22px 0 0; padding: 22px 18px 26px;
-    max-height:88vh; overflow-y:auto;
-    animation: slideup .25s ease;
+    border-radius: 22px 22px 0 0; padding: 18px 18px 22px;
+    max-height:92vh; overflow-y:auto;
+    animation: slideup .22s ease;
   }
-  @keyframes slideup{from{transform:translateY(40px); opacity:0;} to{transform:translateY(0); opacity:1;}}
-  .modal-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+  @keyframes slideup{from{transform:translateY(24px); opacity:0;} to{transform:translateY(0); opacity:1;}}
+  .modal-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;}
   .modal-head button{background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-soft);}
 
   .fab{
@@ -324,7 +341,7 @@
     </div>
   </div>
   <button class="sync-badge" id="sync-badge" onclick="openAccountModal()">
-    <span class="sync-dot local" id="sync-dot"></span> <span id="sync-label">On this device</span>
+    <span class="sync-dot loading" id="sync-dot"></span> <span id="sync-label">Loading…</span>
   </button>
 </header>
 
@@ -337,8 +354,23 @@
 
 <div class="app">
 
+  <!-- LOADING SKELETON (shown until we know local vs cloud data is ready) -->
+  <div id="app-loading">
+    <div class="stat-row">
+      <div class="stat skel skel-stat"></div>
+      <div class="stat skel skel-stat"></div>
+    </div>
+    <div class="skel skel-label"></div>
+    <div class="skel skel-row"></div>
+    <div class="skel skel-row"></div>
+    <div class="skel skel-label"></div>
+    <div class="skel skel-row"></div>
+    <div class="skel skel-row"></div>
+    <div class="skel skel-row"></div>
+  </div>
+
   <!-- OVERVIEW -->
-  <section class="view active" id="view-overview">
+  <section class="view" id="view-overview">
     <div class="stat-row">
       <div class="stat ink">
         <div class="label">Total spent</div>
@@ -415,22 +447,36 @@
       <h2 style="font-size:19px;">Add expense</h2>
       <button onclick="closeModal('expense-modal')">✕</button>
     </div>
-    <label>Amount (₹)</label>
-    <input type="number" inputmode="decimal" id="exp-amount" placeholder="0.00">
+
+    <div class="grid2">
+      <div>
+        <label>Amount (₹)</label>
+        <input type="number" inputmode="decimal" id="exp-amount" placeholder="0.00">
+      </div>
+      <div>
+        <label>Date</label>
+        <input type="date" id="exp-date">
+      </div>
+    </div>
 
     <label>Category</label>
     <div class="cat-picker" id="exp-cat-picker"></div>
 
+    <div class="grid2">
+      <div>
+        <label>Time <span style="font-weight:400; text-transform:none;">(optional)</span></label>
+        <input type="time" id="exp-time" placeholder="Now">
+      </div>
+      <div>
+        <label>Trip</label>
+        <select id="exp-trip"></select>
+      </div>
+    </div>
+
     <label>Note</label>
     <input type="text" id="exp-note" placeholder="e.g. Rickshaw to hostel">
 
-    <label>Date</label>
-    <input type="date" id="exp-date">
-
-    <label>Trip</label>
-    <select id="exp-trip"></select>
-
-    <button class="primary" onclick="saveExpense()">Save expense</button>
+    <button class="primary" id="exp-save-btn" onclick="saveExpense()">Save expense</button>
   </div>
 </div>
 
@@ -447,16 +493,21 @@
     <label>Icon</label>
     <div class="emoji-picker" id="trip-emoji-picker"></div>
 
-    <label>Start date</label>
-    <input type="date" id="trip-start">
-
-    <label>End date</label>
-    <input type="date" id="trip-end">
+    <div class="grid2">
+      <div>
+        <label>Start date</label>
+        <input type="date" id="trip-start">
+      </div>
+      <div>
+        <label>End date</label>
+        <input type="date" id="trip-end">
+      </div>
+    </div>
 
     <label>Budget (₹, optional)</label>
     <input type="number" inputmode="decimal" id="trip-budget" placeholder="e.g. 5000">
 
-    <button class="primary" onclick="saveTrip()">Create trip</button>
+    <button class="primary" id="trip-save-btn" onclick="saveTrip()">Create trip</button>
   </div>
 </div>
 
@@ -532,7 +583,7 @@ window.state = {
   trips: [],
   expenses: []
 };
-let selectedCat = null;
+let selectedCat = 'other';
 let selectedEmoji = '✈️';
 let charts = {};
 let currentUser = null;
@@ -540,6 +591,16 @@ let dataSource = 'local';
 let unsubTrips = null;
 let unsubExpenses = null;
 let authMode = 'signin';
+
+// Flags to prevent double-submits
+let isSavingExpense = false;
+let isSavingTrip = false;
+
+// Loading-state tracking (fixes the "data vanishes for a few seconds on refresh" bug)
+let appDataReady = false;
+let tripsSnapshotIn = false;
+let expensesSnapshotIn = false;
+let loadingTimeoutId = null;
 
 const LOCAL_TRIPS_KEY = 'ledger_trips_v1';
 const LOCAL_EXPENSES_KEY = 'ledger_expenses_v1';
@@ -565,7 +626,46 @@ function todayStr(){
   const day = String(d.getDate()).padStart(2,'0');
   return `${y}-${m}-${day}`;
 }
+function nowTimeStr(){
+  const d = new Date();
+  const h = String(d.getHours()).padStart(2,'0');
+  const mnt = String(d.getMinutes()).padStart(2,'0');
+  return `${h}:${mnt}`;
+}
+function fmtTime12(t){
+  if(!t) return '';
+  const [hStr, mStr] = t.split(':');
+  let h = parseInt(hStr,10);
+  const ampm = h>=12 ? 'PM' : 'AM';
+  h = h % 12; if(h===0) h = 12;
+  return `${h}:${mStr} ${ampm}`;
+}
 function genId(){ return 'local_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,9); }
+function sortExpenses(list){
+  list.sort((a,b) => {
+    const ka = (a.date||'') + 'T' + (a.time||'00:00');
+    const kb = (b.date||'') + 'T' + (b.time||'00:00');
+    return kb.localeCompare(ka);
+  });
+  return list;
+}
+
+/* ================= LOADING OVERLAY ================= */
+function showAppLoading(){
+  appDataReady = false;
+  document.getElementById('app-loading').style.display = 'block';
+  document.querySelectorAll('section.view').forEach(v => v.classList.remove('active'));
+}
+function hideAppLoadingAndRender(){
+  if(appDataReady) { refreshCurrentTab(); return; }
+  appDataReady = true;
+  clearTimeout(loadingTimeoutId);
+  document.getElementById('app-loading').style.display = 'none';
+  const activeBtn = document.querySelector('.tab-btn.active');
+  const active = activeBtn ? activeBtn.dataset.tab : 'overview';
+  document.getElementById('view-'+active).classList.add('active');
+  refreshCurrentTab();
+}
 
 /* ================= LOCAL STORAGE ================= */
 function loadLocalState(){
@@ -576,22 +676,39 @@ function loadLocalState(){
     window.state.trips = [];
     window.state.expenses = [];
   }
-  window.state.expenses.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+  sortExpenses(window.state.expenses);
 }
 function saveLocalTrips(){ localStorage.setItem(LOCAL_TRIPS_KEY, JSON.stringify(window.state.trips)); }
 function saveLocalExpenses(){ localStorage.setItem(LOCAL_EXPENSES_KEY, JSON.stringify(window.state.expenses)); }
 
 /* ================= FIREBASE AUTH & SYNC ================= */
 function attachCloudListeners(uid){
+  tripsSnapshotIn = false;
+  expensesSnapshotIn = false;
   unsubTrips = onSnapshot(collection(db, "users", uid, "trips"), (snapshot) => {
     window.state.trips = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    refreshCurrentTab();
+    tripsSnapshotIn = true;
+    if(tripsSnapshotIn && expensesSnapshotIn) hideAppLoadingAndRender();
+    else if(appDataReady) refreshCurrentTab();
+  }, () => {
+    // On listener error, don't leave the user staring at a skeleton forever
+    tripsSnapshotIn = true;
+    if(tripsSnapshotIn && expensesSnapshotIn) hideAppLoadingAndRender();
   });
   unsubExpenses = onSnapshot(collection(db, "users", uid, "expenses"), (snapshot) => {
     window.state.expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    window.state.expenses.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
-    refreshCurrentTab();
+    sortExpenses(window.state.expenses);
+    expensesSnapshotIn = true;
+    if(tripsSnapshotIn && expensesSnapshotIn) hideAppLoadingAndRender();
+    else if(appDataReady) refreshCurrentTab();
+  }, () => {
+    expensesSnapshotIn = true;
+    if(tripsSnapshotIn && expensesSnapshotIn) hideAppLoadingAndRender();
   });
+
+  // Safety net: never let the skeleton hang forever, even on a very slow connection
+  clearTimeout(loadingTimeoutId);
+  loadingTimeoutId = setTimeout(hideAppLoadingAndRender, 8000);
 }
 function detachCloudListeners(){
   if(unsubTrips){ unsubTrips(); unsubTrips = null; }
@@ -622,7 +739,7 @@ async function migrateLocalDataToCloud(uid){
     for(const e of localExpenses){
       await addDoc(collection(db, "users", uid, "expenses"), {
         amount: e.amount, category: e.category, note: e.note || '', date: e.date || '',
-        tripId: e.tripId ? (idMap[e.tripId] || null) : null
+        time: e.time || '', tripId: e.tripId ? (idMap[e.tripId] || null) : null
       });
     }
     localStorage.setItem(flag, '1');
@@ -636,6 +753,7 @@ async function migrateLocalDataToCloud(uid){
 function updateSyncBadge(){
   const dot = document.getElementById('sync-dot');
   const label = document.getElementById('sync-label');
+  dot.classList.remove('loading');
   if(currentUser){
     dot.classList.remove('local');
     label.textContent = currentUser.email ? currentUser.email.split('@')[0] + ' · synced' : 'Synced';
@@ -662,15 +780,16 @@ onAuthStateChanged(auth, async (user) => {
   if(user){
     currentUser = user;
     dataSource = 'cloud';
+    updateSyncBadge();
     await migrateLocalDataToCloud(user.uid);
     attachCloudListeners(user.uid);
   } else {
     currentUser = null;
     dataSource = 'local';
     loadLocalState();
-    refreshCurrentTab();
+    updateSyncBadge();
+    hideAppLoadingAndRender();
   }
-  updateSyncBadge();
   updateAccountModalView();
 });
 
@@ -709,6 +828,8 @@ window.submitAuth = async function(){
   errBox.textContent = '';
   if(!email || !password){ errBox.textContent = 'Enter an email and password.'; return; }
   if(password.length < 6){ errBox.textContent = 'Password must be at least 6 characters.'; return; }
+  const btn = document.getElementById('auth-submit');
+  btn.disabled = true;
   try{
     if(authMode === 'signin'){
       await signInWithEmailAndPassword(auth, email, password);
@@ -719,6 +840,8 @@ window.submitAuth = async function(){
     showToast(authMode === 'signin' ? 'Signed in' : 'Account created');
   }catch(err){
     errBox.textContent = friendlyAuthError(err);
+  }finally{
+    btn.disabled = false;
   }
 }
 window.handleSignOut = async function(){
@@ -731,7 +854,7 @@ window.handleSignOut = async function(){
   }
 }
 function friendlyAuthError(err){
-  console.error("Firebase Auth Error:", err); // Logs raw error to browser console
+  console.error("Firebase Auth Error:", err);
   const code = err && err.code || '';
   if(code.includes('unauthorized-domain')) return 'Domain not authorized in Firebase Console.';
   if(code.includes('email-already-in-use')) return 'Email already in use — sign in instead.';
@@ -743,6 +866,7 @@ function friendlyAuthError(err){
 
 /* ================= TABS ================= */
 window.switchTab = function(tab){
+  if(!appDataReady) return; // still loading — nothing to show yet
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById('view-'+tab).classList.add('active');
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
@@ -757,9 +881,12 @@ window.openExpenseModal = function(){
   document.getElementById('exp-amount').value = '';
   document.getElementById('exp-note').value = '';
   document.getElementById('exp-date').value = todayStr();
-  selectedCat = null;
+  document.getElementById('exp-time').value = '';
+  selectedCat = 'other';
   renderCatPicker();
   populateTripSelect(document.getElementById('exp-trip'));
+  const btn = document.getElementById('exp-save-btn');
+  btn.disabled = false; btn.textContent = 'Save expense';
   document.getElementById('expense-modal').classList.add('active');
 }
 window.openTripModal = function(){
@@ -769,6 +896,8 @@ window.openTripModal = function(){
   document.getElementById('trip-budget').value = '';
   selectedEmoji = TRIP_EMOJIS[0];
   renderEmojiPicker();
+  const btn = document.getElementById('trip-save-btn');
+  btn.disabled = false; btn.textContent = 'Create trip';
   document.getElementById('trip-modal').classList.add('active');
 }
 window.closeModal = function(id){ document.getElementById(id).classList.remove('active'); }
@@ -796,20 +925,27 @@ function populateTripSelect(sel){
 
 /* ================= ACTIONS ================= */
 window.saveExpense = async function(){
+  if(isSavingExpense) return; // guard against double-tap / double-submit
   const amount = parseFloat(document.getElementById('exp-amount').value);
   if(!amount || amount<=0){ showToast('Enter a valid amount'); return; }
-  if(!selectedCat){ showToast('Pick a category'); return; }
+  const category = selectedCat || 'other';
   const date = document.getElementById('exp-date').value || todayStr();
+  const time = document.getElementById('exp-time').value || nowTimeStr();
   const note = document.getElementById('exp-note').value.trim();
   const tripId = document.getElementById('exp-trip').value || null;
-  const payload = { amount, category: selectedCat, note, date, tripId };
+  const payload = { amount, category, note, date, time, tripId };
+
+  isSavingExpense = true;
+  const btn = document.getElementById('exp-save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
 
   try {
     if(dataSource === 'cloud' && currentUser){
       await addDoc(collection(db, "users", currentUser.uid, "expenses"), payload);
     } else {
       window.state.expenses.unshift({ id: genId(), ...payload });
-      window.state.expenses.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+      sortExpenses(window.state.expenses);
       saveLocalExpenses();
       refreshCurrentTab();
     }
@@ -817,16 +953,26 @@ window.saveExpense = async function(){
     showToast('Expense saved');
   } catch(e) {
     showToast('Error saving expense');
+  } finally {
+    isSavingExpense = false;
+    btn.disabled = false;
+    btn.textContent = 'Save expense';
   }
 }
 
 window.saveTrip = async function(){
+  if(isSavingTrip) return; // guard against double-tap / double-submit
   const name = document.getElementById('trip-name').value.trim();
   if(!name){ showToast('Give your trip a name'); return; }
   const start = document.getElementById('trip-start').value;
   const end = document.getElementById('trip-end').value;
   const budget = parseFloat(document.getElementById('trip-budget').value) || 0;
   const payload = { name, icon: selectedEmoji, start, end, budget };
+
+  isSavingTrip = true;
+  const btn = document.getElementById('trip-save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
 
   try {
     if(dataSource === 'cloud' && currentUser){
@@ -840,10 +986,15 @@ window.saveTrip = async function(){
     showToast('Trip created');
   } catch(e) {
     showToast('Error creating trip');
+  } finally {
+    isSavingTrip = false;
+    btn.disabled = false;
+    btn.textContent = 'Create trip';
   }
 }
 
-window.deleteExpense = async function(id){
+window.deleteExpense = async function(id, btnEl){
+  if(btnEl){ btnEl.disabled = true; }
   try {
     if(dataSource === 'cloud' && currentUser){
       await deleteDoc(doc(db, "users", currentUser.uid, "expenses", id));
@@ -855,6 +1006,7 @@ window.deleteExpense = async function(id){
     showToast('Expense deleted');
   } catch(e) {
     showToast('Error deleting expense');
+    if(btnEl){ btnEl.disabled = false; }
   }
 }
 
@@ -883,9 +1035,15 @@ window.deleteTrip = async function(id){
 }
 
 function refreshCurrentTab(){
+  if(!appDataReady) return;
   const activeBtn = document.querySelector('.tab-btn.active');
   const active = activeBtn ? activeBtn.dataset.tab : 'overview';
-  switchTab(active);
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+active).classList.add('active');
+  if(active==='overview') renderOverview();
+  if(active==='trips') renderTripsList();
+  if(active==='expenses') renderExpensesList();
+  if(active==='analysis') renderAnalysis();
 }
 
 /* ================= RENDERING ================= */
@@ -954,16 +1112,17 @@ window.viewTripExpenses = function(tripId){
 function ticketHtml(e){
   const c = catInfo(e.category);
   const trip = window.state.trips.find(t=>t.id===e.tripId);
+  const timeStr = e.time ? fmtTime12(e.time) : '';
   return `
     <div class="ticket">
       <div class="icon" style="background:${c.color}22; color:${c.color};">${c.emoji}</div>
       <div class="mid">
         <div class="cat">${c.label}${e.note ? ' · ' : ''}<span style="font-weight:400;">${escapeHtml(e.note||'')}</span></div>
-        <div class="note">${e.date || ''}${trip ? ' · '+trip.icon+' '+escapeHtml(trip.name) : ''}</div>
+        <div class="note">${e.date || ''}${timeStr ? ' · '+timeStr : ''}${trip ? ' · '+trip.icon+' '+escapeHtml(trip.name) : ''}</div>
       </div>
       <div class="leader"></div>
       <div class="amt">${fmt(e.amount)}</div>
-      <button class="del" onclick="deleteExpense('${e.id}')">✕</button>
+      <button class="del" onclick="deleteExpense('${e.id}', this)">✕</button>
     </div>`;
 }
 function populateFilters(){
@@ -1086,9 +1245,10 @@ function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
-loadLocalState();
-renderOverview();
-updateSyncBadge();
+// Boot: show the skeleton immediately, wait for auth to settle before
+// deciding whether to render local or cloud data — this is what stops
+// the "empty, then reappears a few seconds later" flash on refresh.
+showAppLoading();
 </script>
 </body>
 </html>
