@@ -318,6 +318,7 @@
   }
   .pay-tag.cash{background:#FFF1D6; color:#9C6B00;}
   .pay-tag.upi{background:#DDF2EE; color:var(--teal-dark);}
+  .pay-tag.big{background:#F1ECFA; color:var(--purple);}
 
   .group-header{
     font-family:'Inter'; font-weight:700; font-size:12.5px; color:var(--ink-soft);
@@ -364,6 +365,14 @@
   }
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 
+  .big-badge-row{display:flex; gap:12px; margin-bottom:16px;}
+  .big-total-card{
+    flex:1; background:var(--white); border:1.5px dashed var(--purple);
+    border-radius:14px; padding:14px 16px;
+  }
+  .big-total-card .label{font-size:11.5px; font-weight:700; color:var(--purple); text-transform:uppercase; letter-spacing:.03em;}
+  .big-total-card .value{font-family:'JetBrains Mono'; font-size:19px; font-weight:700; margin-top:4px;}
+
   @media (max-width:420px){
     .stat .value{font-size:21px;}
     .grid2{grid-template-columns:1fr;}
@@ -392,7 +401,7 @@
   <button class="tab-btn" data-tab="analysis" onclick="switchTab('analysis')">Analysis</button>
 </nav>
 
-<div class="app">
+<div class="app" id="swipe-area">
 
   <!-- LOADING SKELETON (shown until we know local vs cloud data is ready) -->
   <div id="app-loading">
@@ -460,6 +469,11 @@
         <option value="cash">💵 Cash only</option>
         <option value="upi">📱 UPI only</option>
       </select>
+      <select id="filter-type" onchange="renderExpensesList()">
+        <option value="">Daily & big</option>
+        <option value="daily">📆 Daily only</option>
+        <option value="big">💰 Big only</option>
+      </select>
     </div>
     <div id="expenses-list"></div>
   </section>
@@ -469,18 +483,62 @@
     <div class="section-head" style="margin-top:6px;">
       <h2>Analysis</h2>
     </div>
+
+    <div class="filter-row">
+      <select id="an-filter-trip" onchange="renderAnalysis()"></select>
+    </div>
+    <div class="pill-toggle-row">
+      <button type="button" id="an-big-toggle" onclick="toggleAnalysisBig()">💰 Include big expenses in trends</button>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat ink">
+        <div class="label">Daily spend</div>
+        <div class="value mono" id="an-stat-daily">₹0</div>
+      </div>
+      <div class="stat coral">
+        <div class="label">Daily average</div>
+        <div class="value mono" id="an-stat-avg">₹0</div>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat" style="background:linear-gradient(150deg,#F5A623,#C97F00);">
+        <div class="label">💵 Cash</div>
+        <div class="value mono" id="an-stat-cash">₹0</div>
+      </div>
+      <div class="stat" style="background:linear-gradient(150deg,#12877D,#0B6B62);">
+        <div class="label">📱 UPI</div>
+        <div class="value mono" id="an-stat-upi">₹0</div>
+      </div>
+    </div>
+
     <div class="chart-box">
       <h3>Spending by category</h3>
       <canvas id="chart-category"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>Cash vs UPI</h3>
+      <canvas id="chart-paymode"></canvas>
     </div>
     <div class="chart-box">
       <h3>Spending by month</h3>
       <canvas id="chart-month"></canvas>
     </div>
     <div class="chart-box">
-      <h3>Trip comparison</h3>
+      <h3>Trip comparison · cash vs UPI</h3>
       <canvas id="chart-trips"></canvas>
     </div>
+
+    <div class="section-head">
+      <h2>Big one-time expenses</h2>
+    </div>
+    <div class="big-badge-row">
+      <div class="big-total-card">
+        <div class="label">Kept out of trends</div>
+        <div class="value" id="an-big-total">₹0</div>
+      </div>
+    </div>
+    <div id="an-big-list"></div>
   </section>
 
 </div>
@@ -512,6 +570,9 @@
 
     <label>Paid via</label>
     <div class="cat-picker" id="exp-pay-picker"></div>
+
+    <label>Type</label>
+    <div class="cat-picker" id="exp-type-picker"></div>
 
     <div class="grid2">
       <div>
@@ -641,6 +702,7 @@ let pendingExpenses = [];  // optimistic, not-yet-confirmed-by-cloud expenses
 
 let selectedCat = 'other';
 let selectedPay = 'upi';
+let selectedType = 'daily';
 let selectedEmoji = '✈️';
 let charts = {};
 let currentUser = null;
@@ -652,6 +714,7 @@ let authMode = 'signin';
 let editingExpenseId = null; // null = add mode
 let editingTripId = null;    // null = add mode
 let groupByTrip = false;
+let analysisIncludeBig = false;
 
 // Flags to prevent double-submits
 let isSavingExpense = false;
@@ -662,10 +725,13 @@ let appDataReady = false;
 let tripsSnapshotIn = false;
 let expensesSnapshotIn = false;
 let loadingTimeoutId = null;
+let renderedFromCache = false;
 
 const LOCAL_TRIPS_KEY = 'ledger_trips_v1';
 const LOCAL_EXPENSES_KEY = 'ledger_expenses_v1';
 const LOCAL_LAST_TRIP_KEY = 'ledger_last_trip';
+const LOCAL_LAST_UID_KEY = 'ledger_last_uid';
+const LOCAL_LAST_EMAIL_KEY = 'ledger_last_email';
 
 const CATEGORIES = [
   {key:'food', label:'Food', emoji:'🍔', color:'#FF6B5B'},
@@ -681,10 +747,16 @@ const PAY_MODES = [
   {key:'cash', label:'Cash', emoji:'💵'},
   {key:'upi', label:'UPI', emoji:'📱'}
 ];
+const EXPENSE_TYPES = [
+  {key:'daily', label:'Daily expense', emoji:'📆'},
+  {key:'big', label:'Big one-time', emoji:'💰'}
+];
 const TRIP_EMOJIS = ['✈️','🏖️','⛰️','🚗','🎒','🌆','🏕️','🚆'];
 
 function catInfo(key){ return CATEGORIES.find(c=>c.key===key) || CATEGORIES[CATEGORIES.length-1]; }
 function payInfo(key){ return PAY_MODES.find(p=>p.key===key) || PAY_MODES[1]; }
+function typeInfo(key){ return EXPENSE_TYPES.find(t=>t.key===key) || EXPENSE_TYPES[0]; }
+function isBig(e){ return e.expenseType === 'big'; }
 function fmt(n){ return '₹' + Number(n||0).toLocaleString('en-IN', {maximumFractionDigits:0}); }
 function todayStr(){
   const d = new Date();
@@ -755,7 +827,7 @@ function hideAppLoadingAndRender(){
   refreshCurrentTab();
 }
 
-/* ================= LOCAL STORAGE ================= */
+/* ================= LOCAL STORAGE (offline / no-account mode) ================= */
 function loadLocalState(){
   try{
     window.state.trips = JSON.parse(localStorage.getItem(LOCAL_TRIPS_KEY) || '[]');
@@ -774,6 +846,49 @@ function setLastTripId(id){
   else localStorage.removeItem(LOCAL_LAST_TRIP_KEY);
 }
 
+/* ================= LOCAL CACHE OF CLOUD DATA (instant boot, no spinner wait) ================= */
+// We mirror the last-known cloud snapshot into localStorage per-uid. On boot we render
+// that cache immediately (no skeleton), then let the live Firestore listeners quietly
+// refresh it underneath once the network/auth round-trip completes.
+function cacheKeyTrips(uid){ return 'ledger_cache_trips_' + uid; }
+function cacheKeyExpenses(uid){ return 'ledger_cache_expenses_' + uid; }
+function cacheCloudTrips(uid, docs){
+  try{ localStorage.setItem(cacheKeyTrips(uid), JSON.stringify(docs)); }catch(e){ /* storage full/unavailable — ignore */ }
+}
+function cacheCloudExpenses(uid, docs){
+  try{ localStorage.setItem(cacheKeyExpenses(uid), JSON.stringify(docs)); }catch(e){ /* ignore */ }
+}
+function clearCloudCache(uid){
+  localStorage.removeItem(cacheKeyTrips(uid));
+  localStorage.removeItem(cacheKeyExpenses(uid));
+}
+function tryRenderFromCacheImmediately(){
+  const lastUid = localStorage.getItem(LOCAL_LAST_UID_KEY);
+  if(!lastUid) return false;
+  let cachedTrips = null, cachedExpenses = null;
+  try{ cachedTrips = JSON.parse(localStorage.getItem(cacheKeyTrips(lastUid)) || 'null'); }catch(e){ /* ignore */ }
+  try{ cachedExpenses = JSON.parse(localStorage.getItem(cacheKeyExpenses(lastUid)) || 'null'); }catch(e){ /* ignore */ }
+  if(!cachedTrips && !cachedExpenses) return false;
+
+  window.state.trips = cachedTrips || [];
+  window.state.expenses = cachedExpenses || [];
+  sortExpensesArr(window.state.expenses);
+  dataSource = 'cloud';
+  renderedFromCache = true;
+
+  const dot = document.getElementById('sync-dot');
+  const label = document.getElementById('sync-label');
+  dot.classList.remove('loading');
+  const cachedEmail = localStorage.getItem(LOCAL_LAST_EMAIL_KEY);
+  label.textContent = cachedEmail ? cachedEmail.split('@')[0] + ' · syncing…' : 'Syncing…';
+
+  appDataReady = true;
+  document.getElementById('app-loading').style.display = 'none';
+  document.getElementById('view-overview').classList.add('active');
+  refreshCurrentTab();
+  return true;
+}
+
 /* ================= FIREBASE AUTH & SYNC ================= */
 function attachCloudListeners(uid){
   tripsSnapshotIn = false;
@@ -784,6 +899,7 @@ function attachCloudListeners(uid){
     const confirmedClientIds = new Set(docs.map(d => d.clientId).filter(Boolean));
     pendingTrips = pendingTrips.filter(p => !confirmedClientIds.has(p.clientId));
     window.state.trips = docs;
+    cacheCloudTrips(uid, docs);
     tripsSnapshotIn = true;
     if(tripsSnapshotIn && expensesSnapshotIn) hideAppLoadingAndRender();
     else if(appDataReady) refreshCurrentTab();
@@ -798,6 +914,7 @@ function attachCloudListeners(uid){
     const confirmedClientIds = new Set(docs.map(d => d.clientId).filter(Boolean));
     pendingExpenses = pendingExpenses.filter(p => !confirmedClientIds.has(p.clientId));
     window.state.expenses = docs;
+    cacheCloudExpenses(uid, docs);
     expensesSnapshotIn = true;
     if(tripsSnapshotIn && expensesSnapshotIn) hideAppLoadingAndRender();
     else if(appDataReady) refreshCurrentTab();
@@ -838,7 +955,8 @@ async function migrateLocalDataToCloud(uid){
     }
     for(const e of localExpenses){
       await addDoc(collection(db, "users", uid, "expenses"), {
-        amount: e.amount, category: e.category, paymentMode: e.paymentMode || 'upi', note: e.note || '', date: e.date || '',
+        amount: e.amount, category: e.category, paymentMode: e.paymentMode || 'upi',
+        expenseType: e.expenseType || 'daily', note: e.note || '', date: e.date || '',
         time: e.time || '', tripId: e.tripId ? (idMap[e.tripId] || null) : null
       });
     }
@@ -882,12 +1000,17 @@ onAuthStateChanged(auth, async (user) => {
   if(user){
     currentUser = user;
     dataSource = 'cloud';
+    localStorage.setItem(LOCAL_LAST_UID_KEY, user.uid);
+    if(user.email) localStorage.setItem(LOCAL_LAST_EMAIL_KEY, user.email);
     updateSyncBadge();
     await migrateLocalDataToCloud(user.uid);
     attachCloudListeners(user.uid);
   } else {
     currentUser = null;
     dataSource = 'local';
+    renderedFromCache = false;
+    localStorage.removeItem(LOCAL_LAST_UID_KEY);
+    localStorage.removeItem(LOCAL_LAST_EMAIL_KEY);
     loadLocalState();
     updateSyncBadge();
     hideAppLoadingAndRender();
@@ -967,6 +1090,7 @@ function friendlyAuthError(err){
 }
 
 /* ================= TABS ================= */
+const TAB_ORDER = ['overview','trips','expenses','analysis'];
 window.switchTab = function(tab){
   if(!appDataReady) return; // still loading — nothing to show yet
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -977,6 +1101,35 @@ window.switchTab = function(tab){
   if(tab==='expenses') renderExpensesList();
   if(tab==='analysis') renderAnalysis();
 }
+
+/* ================= SWIPE NAVIGATION ================= */
+(function attachSwipeNav(){
+  const el = document.getElementById('swipe-area');
+  let startX = 0, startY = 0, startT = 0, tracking = false;
+  el.addEventListener('touchstart', (e) => {
+    if(document.querySelector('.modal-overlay.active')) { tracking = false; return; }
+    if(e.touches.length !== 1) { tracking = false; return; }
+    const t = e.touches[0];
+    startX = t.clientX; startY = t.clientY; startT = Date.now();
+    tracking = true;
+  }, {passive:true});
+  el.addEventListener('touchend', (e) => {
+    if(!tracking) return;
+    tracking = false;
+    if(document.querySelector('.modal-overlay.active')) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    const dt = Date.now() - startT;
+    const HORIZONTAL_THRESHOLD = 55;
+    if(dt < 700 && Math.abs(dx) > HORIZONTAL_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.4){
+      const activeBtn = document.querySelector('.tab-btn.active');
+      const idx = activeBtn ? TAB_ORDER.indexOf(activeBtn.dataset.tab) : 0;
+      if(dx < 0 && idx < TAB_ORDER.length - 1){ switchTab(TAB_ORDER[idx+1]); }
+      else if(dx > 0 && idx > 0){ switchTab(TAB_ORDER[idx-1]); }
+    }
+  }, {passive:true});
+})();
 
 /* ================= MODALS ================= */
 window.openExpenseModal = function(presetTripId, editId){
@@ -1000,8 +1153,10 @@ window.openExpenseModal = function(presetTripId, editId){
     document.getElementById('exp-time').value = e.time || '';
     selectedCat = e.category || 'other';
     selectedPay = e.paymentMode || 'upi';
+    selectedType = e.expenseType || 'daily';
     renderCatPicker();
     renderPayPicker();
+    renderTypePicker();
     populateTripSelect(document.getElementById('exp-trip'));
     document.getElementById('exp-trip').value = e.tripId || '';
   } else {
@@ -1015,8 +1170,10 @@ window.openExpenseModal = function(presetTripId, editId){
     document.getElementById('exp-time').value = '';
     selectedCat = 'other';
     selectedPay = 'upi';
+    selectedType = 'daily';
     renderCatPicker();
     renderPayPicker();
+    renderTypePicker();
     populateTripSelect(document.getElementById('exp-trip'));
     const defaultTrip = presetTripId || getLastTripId();
     document.getElementById('exp-trip').value = defaultTrip && findTripById(defaultTrip) ? defaultTrip : '';
@@ -1080,6 +1237,14 @@ function renderPayPicker(){
 }
 window.pickPay = function(key){ selectedPay = key; renderPayPicker(); }
 
+function renderTypePicker(){
+  const box = document.getElementById('exp-type-picker');
+  box.innerHTML = EXPENSE_TYPES.map(t=>
+    `<div class="cat-chip ${selectedType===t.key?'sel':''}" onclick="pickType('${t.key}')">${t.emoji} ${t.label}</div>`
+  ).join('') + `<div style="width:100%; font-size:11.5px; color:var(--ink-soft); margin-top:2px;">Big one-time expenses (rent, fees…) stay in your totals but are left out of the daily analysis trends by default.</div>`;
+}
+window.pickType = function(key){ selectedType = key; renderTypePicker(); }
+
 function renderEmojiPicker(){
   const box = document.getElementById('trip-emoji-picker');
   box.innerHTML = TRIP_EMOJIS.map(e=>
@@ -1102,11 +1267,12 @@ window.saveExpense = async function(){
   if(!amount || amount<=0){ showToast('Enter a valid amount'); return; }
   const category = selectedCat || 'other';
   const paymentMode = selectedPay || 'upi';
+  const expenseType = selectedType || 'daily';
   const date = document.getElementById('exp-date').value || todayStr();
   const time = document.getElementById('exp-time').value || nowTimeStr();
   const note = document.getElementById('exp-note').value.trim();
   const tripId = document.getElementById('exp-trip').value || null;
-  const payload = { amount, category, paymentMode, note, date, time, tripId };
+  const payload = { amount, category, paymentMode, expenseType, note, date, time, tripId };
 
   isSavingExpense = true;
   setLastTripId(tripId || '');
@@ -1407,11 +1573,12 @@ function ticketHtml(e){
   const trip = findTripById(e.tripId);
   const timeStr = e.time ? fmtTime12(e.time) : '';
   const pendingCls = e._pending ? ' pending' : '';
+  const bigTag = isBig(e) ? `<span class="pay-tag big">💰 Big</span>` : '';
   return `
     <div class="ticket${pendingCls}" onclick="openExpenseModal(null,'${e.id}')">
       <div class="icon" style="background:${c.color}22; color:${c.color};">${c.emoji}</div>
       <div class="mid">
-        <div class="cat">${c.label}<span class="pay-tag ${e.paymentMode==='cash'?'cash':'upi'}">${p.emoji} ${p.label}</span></div>
+        <div class="cat">${c.label}<span class="pay-tag ${e.paymentMode==='cash'?'cash':'upi'}">${p.emoji} ${p.label}</span>${bigTag}</div>
         <div class="note">${escapeHtml(e.note||'')}${e.note?' · ':''}${e.date || ''}${timeStr ? ' · '+timeStr : ''}${trip ? ' · '+trip.icon+' '+escapeHtml(trip.name) : ''}</div>
       </div>
       <div class="leader"></div>
@@ -1444,11 +1611,13 @@ window.renderExpensesList = function(){
   const tripFilter = document.getElementById('filter-trip').value;
   const catFilter = document.getElementById('filter-cat').value;
   const payFilter = document.getElementById('filter-pay').value;
+  const typeFilter = document.getElementById('filter-type').value;
   let list = [...allExpenses()];
   if(tripFilter === 'none') list = list.filter(e=>!e.tripId);
   else if(tripFilter) list = list.filter(e=>e.tripId===tripFilter);
   if(catFilter) list = list.filter(e=>e.category===catFilter);
   if(payFilter) list = list.filter(e=>(e.paymentMode||'upi')===payFilter);
+  if(typeFilter) list = list.filter(e=>(e.expenseType||'daily')===typeFilter);
 
   const box = document.getElementById('expenses-list');
   if(list.length===0){
@@ -1478,17 +1647,52 @@ window.renderExpensesList = function(){
   }).join('');
 }
 
-/* ================= ANALYSIS CHARTS ================= */
+/* ================= ANALYSIS ================= */
 function destroyChart(key){ if(charts[key]){ charts[key].destroy(); delete charts[key]; } }
 
+function populateAnalysisTripFilter(){
+  const sel = document.getElementById('an-filter-trip');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All trips & personal</option><option value="none">Personal only</option>' +
+    allTrips().map(t=>`<option value="${t.id}">${t.icon} ${escapeHtml(t.name)}</option>`).join('');
+  sel.value = cur || '';
+}
+window.toggleAnalysisBig = function(){
+  analysisIncludeBig = !analysisIncludeBig;
+  document.getElementById('an-big-toggle').classList.toggle('active', analysisIncludeBig);
+  renderAnalysis();
+}
+
 function renderAnalysis(){
-  const expenses = allExpenses();
+  populateAnalysisTripFilter();
+  const tripFilter = document.getElementById('an-filter-trip').value;
+  const allExp = allExpenses();
   const trips = allTrips();
 
+  // Scope by selected trip (or personal / everything)
+  let scoped = allExp;
+  if(tripFilter === 'none') scoped = allExp.filter(e=>!e.tripId);
+  else if(tripFilter) scoped = allExp.filter(e=>e.tripId===tripFilter);
+
+  const bigItems = scoped.filter(e=>isBig(e));
+  const trendItems = analysisIncludeBig ? scoped : scoped.filter(e=>!isBig(e));
+
+  // ---- Stat tiles ----
+  const dailyTotal = trendItems.reduce((s,e)=>s+e.amount,0);
+  const distinctDays = new Set(trendItems.map(e=>e.date).filter(Boolean)).size;
+  const dailyAvg = distinctDays > 0 ? dailyTotal / distinctDays : 0;
+  const cashTotal = trendItems.filter(e=>e.paymentMode==='cash').reduce((s,e)=>s+e.amount,0);
+  const upiTotal = trendItems.filter(e=>(e.paymentMode||'upi')!=='cash').reduce((s,e)=>s+e.amount,0);
+  document.getElementById('an-stat-daily').textContent = fmt(dailyTotal);
+  document.getElementById('an-stat-avg').textContent = fmt(dailyAvg);
+  document.getElementById('an-stat-cash').textContent = fmt(cashTotal);
+  document.getElementById('an-stat-upi').textContent = fmt(upiTotal);
+
+  // ---- Category breakdown ----
   destroyChart('cat');
   const byCat = CATEGORIES.map(c=>({
     ...c,
-    total: expenses.filter(e=>e.category===c.key).reduce((s,e)=>s+e.amount,0)
+    total: trendItems.filter(e=>e.category===c.key).reduce((s,e)=>s+e.amount,0)
   })).filter(c=>c.total>0);
 
   const ctxCat = document.getElementById('chart-category').getContext('2d');
@@ -1509,9 +1713,31 @@ function renderAnalysis(){
     }
   });
 
+  // ---- Cash vs UPI ----
+  destroyChart('paymode');
+  const ctxPay = document.getElementById('chart-paymode').getContext('2d');
+  const payHasData = (cashTotal + upiTotal) > 0;
+  charts.paymode = new Chart(ctxPay, {
+    type: 'doughnut',
+    data: {
+      labels: payHasData ? ['💵 Cash', '📱 UPI'] : ['No data yet'],
+      datasets: [{
+        data: payHasData ? [cashTotal, upiTotal] : [1],
+        backgroundColor: payHasData ? ['#F5A623', '#12877D'] : ['#E4DCD0'],
+        borderWidth: 3,
+        borderColor: '#FBF7F1'
+      }]
+    },
+    options: {
+      plugins: { legend: { position:'bottom', labels:{ font:{family:'Inter', size:12}, padding:14 } } },
+      cutout: '62%'
+    }
+  });
+
+  // ---- Monthly trend ----
   destroyChart('month');
   const monthMap = {};
-  expenses.forEach(e=>{
+  trendItems.forEach(e=>{
     const m = (e.date||'').slice(0,7) || 'Unknown';
     monthMap[m] = (monthMap[m]||0) + e.amount;
   });
@@ -1534,29 +1760,43 @@ function renderAnalysis(){
     }
   });
 
+  // ---- Trip comparison, split cash vs UPI (always across all trips regardless of trip filter) ----
   destroyChart('trips');
-  const tripTotals = trips.map(t=>({
-    name: t.icon+' '+t.name,
-    total: expenses.filter(e=>e.tripId===t.id).reduce((s,e)=>s+e.amount,0)
-  }));
+  const tripPool = analysisIncludeBig ? allExp : allExp.filter(e=>!isBig(e));
+  const tripStats = trips.map(t=>{
+    const items = tripPool.filter(e=>e.tripId===t.id);
+    return {
+      name: t.icon+' '+t.name,
+      cash: items.filter(e=>e.paymentMode==='cash').reduce((s,e)=>s+e.amount,0),
+      upi: items.filter(e=>(e.paymentMode||'upi')!=='cash').reduce((s,e)=>s+e.amount,0)
+    };
+  });
   const ctxTrips = document.getElementById('chart-trips').getContext('2d');
   charts.trips = new Chart(ctxTrips, {
     type: 'bar',
     data: {
-      labels: tripTotals.length ? tripTotals.map(t=>t.name) : ['No trips yet'],
-      datasets: [{
-        data: tripTotals.length ? tripTotals.map(t=>t.total) : [0],
-        backgroundColor: '#7C5CBF',
-        borderRadius: 6,
-        maxBarThickness: 42
-      }]
+      labels: tripStats.length ? tripStats.map(t=>t.name) : ['No trips yet'],
+      datasets: tripStats.length ? [
+        { label:'Cash', data: tripStats.map(t=>t.cash), backgroundColor:'#F5A623', stack:'s', borderRadius:4, maxBarThickness:34 },
+        { label:'UPI', data: tripStats.map(t=>t.upi), backgroundColor:'#12877D', stack:'s', borderRadius:4, maxBarThickness:34 }
+      ] : [{ data:[0], backgroundColor:'#E4DCD0' }]
     },
     options: {
       indexAxis: 'y',
-      plugins:{legend:{display:false}},
-      scales:{ x:{ beginAtZero:true, grid:{color:'#EFE9DD'} }, y:{ grid:{display:false} } }
+      plugins:{legend:{ display: tripStats.length>0, position:'bottom', labels:{font:{family:'Inter', size:12}} }},
+      scales:{ x:{ stacked:true, beginAtZero:true, grid:{color:'#EFE9DD'} }, y:{ stacked:true, grid:{display:false} } }
     }
   });
+
+  // ---- Big one-time expenses (kept out of the trend charts by default) ----
+  const bigTotal = bigItems.reduce((s,e)=>s+e.amount,0);
+  document.getElementById('an-big-total').textContent = fmt(bigTotal);
+  const bigListBox = document.getElementById('an-big-list');
+  if(bigItems.length===0){
+    bigListBox.innerHTML = `<div class="empty"><span class="big">💰</span>No big one-time expenses logged for this view. Mark rent, fees, deposits etc. as "Big one-time" when adding an expense to see them here.</div>`;
+  } else {
+    bigListBox.innerHTML = bigItems.map(e=>ticketHtml(e)).join('');
+  }
 }
 
 /* ================= UTILS ================= */
@@ -1571,10 +1811,12 @@ function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
-// Boot: show the skeleton immediately, wait for auth to settle before
-// deciding whether to render local or cloud data — this is what stops
-// the "empty, then reappears a few seconds later" flash on refresh.
-showAppLoading();
+// Boot: try to render instantly from the last-known cloud cache (no network wait).
+// If there's no cache (first run, or a local-only user), fall back to the skeleton
+// while we wait for local storage / auth+Firestore to resolve.
+if(!tryRenderFromCacheImmediately()){
+  showAppLoading();
+}
 </script>
 </body>
 </html>
