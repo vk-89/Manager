@@ -403,7 +403,7 @@
 
 <div class="app" id="swipe-area">
 
-  <!-- LOADING SKELETON (shown until we know local vs cloud data is ready) -->
+  <!-- LOADING SKELETON -->
   <div id="app-loading">
     <div class="stat-row">
       <div class="stat skel skel-stat"></div>
@@ -546,7 +546,7 @@
 <button class="fab" onclick="openExpenseModal()">+</button>
 <div class="toast" id="toast"></div>
 
-<!-- EXPENSE MODAL (used for both add & edit) -->
+<!-- EXPENSE MODAL -->
 <div class="modal-overlay" id="expense-modal">
   <div class="modal">
     <div class="modal-head">
@@ -593,7 +593,7 @@
   </div>
 </div>
 
-<!-- TRIP MODAL (used for both add & edit) -->
+<!-- TRIP MODAL -->
 <div class="modal-overlay" id="trip-modal">
   <div class="modal">
     <div class="modal-head">
@@ -638,7 +638,6 @@
         Everything you add is saved on this device right now. Sign in to back it up and sync across your devices.
       </p>
 
-      <!-- GOOGLE SIGN-IN BUTTON -->
       <button class="ghost" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:14px; font-weight:600; border-color:#C9C2B4;" onclick="handleGoogleSignIn()">
         <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.616z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
         Continue with Google
@@ -693,12 +692,13 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 /* ================= STATE ================= */
+window.appDataReady = false;
 window.state = {
-  trips: [],       // confirmed (cloud or local) trips
-  expenses: []      // confirmed (cloud or local) expenses
+  trips: [],       
+  expenses: []     
 };
-let pendingTrips = [];     // optimistic, not-yet-confirmed-by-cloud trips
-let pendingExpenses = [];  // optimistic, not-yet-confirmed-by-cloud expenses
+let pendingTrips = [];     
+let pendingExpenses = [];  
 
 let selectedCat = 'other';
 let selectedPay = 'upi';
@@ -711,17 +711,14 @@ let unsubTrips = null;
 let unsubExpenses = null;
 let authMode = 'signin';
 
-let editingExpenseId = null; // null = add mode
-let editingTripId = null;    // null = add mode
+let editingExpenseId = null; 
+let editingTripId = null;    
 let groupByTrip = false;
 let analysisIncludeBig = false;
 
-// Flags to prevent double-submits
 let isSavingExpense = false;
 let isSavingTrip = false;
 
-// Loading-state tracking (fixes the "data vanishes for a few seconds on refresh" bug)
-let appDataReady = false;
 let tripsSnapshotIn = false;
 let expensesSnapshotIn = false;
 let loadingTimeoutId = null;
@@ -752,7 +749,9 @@ const EXPENSE_TYPES = [
   {key:'big', label:'Big one-time', emoji:'💰'}
 ];
 const TRIP_EMOJIS = ['✈️','🏖️','⛰️','🚗','🎒','🌆','🏕️','🚆'];
+const TAB_ORDER = ['overview','trips','expenses','analysis'];
 
+/* ================= HELPER FUNCTIONS ================= */
 function catInfo(key){ return CATEGORIES.find(c=>c.key===key) || CATEGORIES[CATEGORIES.length-1]; }
 function payInfo(key){ return PAY_MODES.find(p=>p.key===key) || PAY_MODES[1]; }
 function typeInfo(key){ return EXPENSE_TYPES.find(t=>t.key===key) || EXPENSE_TYPES[0]; }
@@ -788,8 +787,11 @@ function sortExpensesArr(list){
   });
   return list;
 }
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
 
-/* ================= DISPLAY-LIST HELPERS (merge confirmed + optimistic) ================= */
+/* ================= DISPLAY-LIST HELPERS ================= */
 function allExpenses(){
   if(dataSource === 'cloud' && pendingExpenses.length){
     const merged = [...pendingExpenses, ...window.state.expenses];
@@ -803,31 +805,28 @@ function allTrips(){
   }
   return window.state.trips;
 }
-function findExpenseById(id){
-  return allExpenses().find(e => e.id === id);
-}
-function findTripById(id){
-  return allTrips().find(t => t.id === id);
-}
+function findExpenseById(id){ return allExpenses().find(e => e.id === id); }
+function findTripById(id){ return allTrips().find(t => t.id === id); }
 
 /* ================= LOADING OVERLAY ================= */
 function showAppLoading(){
-  appDataReady = false;
+  window.appDataReady = false;
   document.getElementById('app-loading').style.display = 'block';
   document.querySelectorAll('section.view').forEach(v => v.classList.remove('active'));
 }
 function hideAppLoadingAndRender(){
-  if(appDataReady) { refreshCurrentTab(); return; }
-  appDataReady = true;
+  if(window.appDataReady) { refreshCurrentTab(); return; }
+  window.appDataReady = true;
   clearTimeout(loadingTimeoutId);
   document.getElementById('app-loading').style.display = 'none';
   const activeBtn = document.querySelector('.tab-btn.active');
   const active = activeBtn ? activeBtn.dataset.tab : 'overview';
-  document.getElementById('view-'+active).classList.add('active');
+  const activeView = document.getElementById('view-'+active);
+  if(activeView) activeView.classList.add('active');
   refreshCurrentTab();
 }
 
-/* ================= LOCAL STORAGE (offline / no-account mode) ================= */
+/* ================= LOCAL STORAGE ================= */
 function loadLocalState(){
   try{
     window.state.trips = JSON.parse(localStorage.getItem(LOCAL_TRIPS_KEY) || '[]');
@@ -846,28 +845,21 @@ function setLastTripId(id){
   else localStorage.removeItem(LOCAL_LAST_TRIP_KEY);
 }
 
-/* ================= LOCAL CACHE OF CLOUD DATA (instant boot, no spinner wait) ================= */
-// We mirror the last-known cloud snapshot into localStorage per-uid. On boot we render
-// that cache immediately (no skeleton), then let the live Firestore listeners quietly
-// refresh it underneath once the network/auth round-trip completes.
+/* ================= LOCAL CACHE OF CLOUD DATA ================= */
 function cacheKeyTrips(uid){ return 'ledger_cache_trips_' + uid; }
 function cacheKeyExpenses(uid){ return 'ledger_cache_expenses_' + uid; }
 function cacheCloudTrips(uid, docs){
-  try{ localStorage.setItem(cacheKeyTrips(uid), JSON.stringify(docs)); }catch(e){ /* storage full/unavailable — ignore */ }
+  try{ localStorage.setItem(cacheKeyTrips(uid), JSON.stringify(docs)); }catch(e){}
 }
 function cacheCloudExpenses(uid, docs){
-  try{ localStorage.setItem(cacheKeyExpenses(uid), JSON.stringify(docs)); }catch(e){ /* ignore */ }
-}
-function clearCloudCache(uid){
-  localStorage.removeItem(cacheKeyTrips(uid));
-  localStorage.removeItem(cacheKeyExpenses(uid));
+  try{ localStorage.setItem(cacheKeyExpenses(uid), JSON.stringify(docs)); }catch(e){}
 }
 function tryRenderFromCacheImmediately(){
   const lastUid = localStorage.getItem(LOCAL_LAST_UID_KEY);
   if(!lastUid) return false;
   let cachedTrips = null, cachedExpenses = null;
-  try{ cachedTrips = JSON.parse(localStorage.getItem(cacheKeyTrips(lastUid)) || 'null'); }catch(e){ /* ignore */ }
-  try{ cachedExpenses = JSON.parse(localStorage.getItem(cacheKeyExpenses(lastUid)) || 'null'); }catch(e){ /* ignore */ }
+  try{ cachedTrips = JSON.parse(localStorage.getItem(cacheKeyTrips(lastUid)) || 'null'); }catch(e){}
+  try{ cachedExpenses = JSON.parse(localStorage.getItem(cacheKeyExpenses(lastUid)) || 'null'); }catch(e){}
   if(!cachedTrips && !cachedExpenses) return false;
 
   window.state.trips = cachedTrips || [];
@@ -878,11 +870,11 @@ function tryRenderFromCacheImmediately(){
 
   const dot = document.getElementById('sync-dot');
   const label = document.getElementById('sync-label');
-  dot.classList.remove('loading');
+  if(dot) dot.classList.remove('loading');
   const cachedEmail = localStorage.getItem(LOCAL_LAST_EMAIL_KEY);
-  label.textContent = cachedEmail ? cachedEmail.split('@')[0] + ' · syncing…' : 'Syncing…';
+  if(label) label.textContent = cachedEmail ? cachedEmail.split('@')[0] + ' · syncing…' : 'Syncing…';
 
-  appDataReady = true;
+  window.appDataReady = true;
   document.getElementById('app-loading').style.display = 'none';
   document.getElementById('view-overview').classList.add('active');
   refreshCurrentTab();
@@ -895,19 +887,18 @@ function attachCloudListeners(uid){
   expensesSnapshotIn = false;
   unsubTrips = onSnapshot(collection(db, "users", uid, "trips"), (snapshot) => {
     const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    // reconcile: drop any optimistic trip whose clientId now exists in the confirmed docs
     const confirmedClientIds = new Set(docs.map(d => d.clientId).filter(Boolean));
     pendingTrips = pendingTrips.filter(p => !confirmedClientIds.has(p.clientId));
     window.state.trips = docs;
     cacheCloudTrips(uid, docs);
     tripsSnapshotIn = true;
     if(tripsSnapshotIn && expensesSnapshotIn) hideAppLoadingAndRender();
-    else if(appDataReady) refreshCurrentTab();
+    else if(window.appDataReady) refreshCurrentTab();
   }, () => {
-    // On listener error, don't leave the user staring at a skeleton forever
     tripsSnapshotIn = true;
     if(tripsSnapshotIn && expensesSnapshotIn) hideAppLoadingAndRender();
   });
+
   unsubExpenses = onSnapshot(collection(db, "users", uid, "expenses"), (snapshot) => {
     const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     sortExpensesArr(docs);
@@ -917,20 +908,21 @@ function attachCloudListeners(uid){
     cacheCloudExpenses(uid, docs);
     expensesSnapshotIn = true;
     if(tripsSnapshotIn && expensesSnapshotIn) hideAppLoadingAndRender();
-    else if(appDataReady) refreshCurrentTab();
+    else if(window.appDataReady) refreshCurrentTab();
   }, () => {
     expensesSnapshotIn = true;
     if(tripsSnapshotIn && expensesSnapshotIn) hideAppLoadingAndRender();
   });
 
-  // Safety net: never let the skeleton hang forever, even on a very slow connection
   clearTimeout(loadingTimeoutId);
   loadingTimeoutId = setTimeout(hideAppLoadingAndRender, 8000);
 }
+
 function detachCloudListeners(){
   if(unsubTrips){ unsubTrips(); unsubTrips = null; }
   if(unsubExpenses){ unsubExpenses(); unsubExpenses = null; }
 }
+
 async function migrateLocalDataToCloud(uid){
   const flag = 'ledger_migrated_' + uid;
   if(localStorage.getItem(flag)) return;
@@ -938,14 +930,14 @@ async function migrateLocalDataToCloud(uid){
   try{
     localTrips = JSON.parse(localStorage.getItem(LOCAL_TRIPS_KEY) || '[]');
     localExpenses = JSON.parse(localStorage.getItem(LOCAL_EXPENSES_KEY) || '[]');
-  }catch(e){ /* empty */ }
+  }catch(e){}
 
   if(localTrips.length === 0 && localExpenses.length === 0){
     localStorage.setItem(flag, '1');
     return;
   }
   try{
-    showToast('Syncing local data…');
+    window.showToast('Syncing local data…');
     const idMap = {};
     for(const t of localTrips){
       const ref = await addDoc(collection(db, "users", uid, "trips"), {
@@ -963,14 +955,16 @@ async function migrateLocalDataToCloud(uid){
     localStorage.setItem(flag, '1');
     localStorage.removeItem(LOCAL_TRIPS_KEY);
     localStorage.removeItem(LOCAL_EXPENSES_KEY);
-    showToast('Local data synced to account');
+    window.showToast('Local data synced to account');
   }catch(err){
-    showToast('Could not sync local data');
+    window.showToast('Could not sync local data');
   }
 }
+
 function updateSyncBadge(){
   const dot = document.getElementById('sync-dot');
   const label = document.getElementById('sync-label');
+  if(!dot || !label) return;
   dot.classList.remove('loading');
   if(currentUser){
     dot.classList.remove('local');
@@ -980,9 +974,11 @@ function updateSyncBadge(){
     label.textContent = 'On this device';
   }
 }
+
 function updateAccountModalView(){
   const signedOut = document.getElementById('account-signed-out');
   const signedIn = document.getElementById('account-signed-in');
+  if(!signedOut || !signedIn) return;
   if(currentUser){
     signedOut.style.display = 'none';
     signedIn.style.display = 'block';
@@ -1018,12 +1014,35 @@ onAuthStateChanged(auth, async (user) => {
   updateAccountModalView();
 });
 
+/* ================= ATTACH GLOBAL WINDOW FUNCTIONS ================= */
+window.showToast = function(msg){
+  const t = document.getElementById('toast');
+  if(!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(()=>t.classList.remove('show'), 2000);
+};
+
+window.switchTab = function(tab){
+  if(!window.appDataReady) return; 
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  const target = document.getElementById('view-'+tab);
+  if(target) target.classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  if(tab==='overview') renderOverview();
+  if(tab==='trips') renderTripsList();
+  if(tab==='expenses') window.renderExpensesList();
+  if(tab==='analysis') window.renderAnalysis();
+};
+
 window.openAccountModal = function(){
   document.getElementById('auth-error').textContent = '';
-  setAuthMode('signin');
+  window.setAuthMode('signin');
   updateAccountModalView();
   document.getElementById('account-modal').classList.add('active');
-}
+};
+
 window.setAuthMode = function(mode){
   authMode = mode;
   document.getElementById('auth-tab-signin').style.background = mode==='signin' ? 'var(--ink)' : 'transparent';
@@ -1033,18 +1052,18 @@ window.setAuthMode = function(mode){
   document.getElementById('auth-submit').textContent = mode==='signin' ? 'Sign in' : 'Create account';
   document.getElementById('auth-password').setAttribute('autocomplete', mode==='signin' ? 'current-password' : 'new-password');
   document.getElementById('auth-error').textContent = '';
-}
+};
 
 window.handleGoogleSignIn = async function(){
   const provider = new GoogleAuthProvider();
   try {
     await signInWithPopup(auth, provider);
-    closeModal('account-modal');
-    showToast('Signed in with Google');
+    window.closeModal('account-modal');
+    window.showToast('Signed in with Google');
   } catch(err) {
     document.getElementById('auth-error').textContent = friendlyAuthError(err);
   }
-}
+};
 
 window.submitAuth = async function(){
   const email = document.getElementById('auth-email').value.trim();
@@ -1061,25 +1080,26 @@ window.submitAuth = async function(){
     } else {
       await createUserWithEmailAndPassword(auth, email, password);
     }
-    closeModal('account-modal');
-    showToast(authMode === 'signin' ? 'Signed in' : 'Account created');
+    window.closeModal('account-modal');
+    window.showToast(authMode === 'signin' ? 'Signed in' : 'Account created');
   }catch(err){
     errBox.textContent = friendlyAuthError(err);
   }finally{
     btn.disabled = false;
   }
-}
+};
+
 window.handleSignOut = async function(){
   try{
     await signOut(auth);
-    closeModal('account-modal');
-    showToast('Signed out');
+    window.closeModal('account-modal');
+    window.showToast('Signed out');
   }catch(err){
-    showToast('Error signing out');
+    window.showToast('Error signing out');
   }
-}
+};
+
 function friendlyAuthError(err){
-  console.error("Firebase Auth Error:", err);
   const code = err && err.code || '';
   if(code.includes('unauthorized-domain')) return 'Domain not authorized in Firebase Console.';
   if(code.includes('email-already-in-use')) return 'Email already in use — sign in instead.';
@@ -1089,49 +1109,6 @@ function friendlyAuthError(err){
   return 'Authentication error (' + (code || 'unknown') + '). Please try again.';
 }
 
-/* ================= TABS ================= */
-const TAB_ORDER = ['overview','trips','expenses','analysis'];
-window.switchTab = function(tab){
-  if(!appDataReady) return; // still loading — nothing to show yet
-  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-  document.getElementById('view-'+tab).classList.add('active');
-  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
-  if(tab==='overview') renderOverview();
-  if(tab==='trips') renderTripsList();
-  if(tab==='expenses') renderExpensesList();
-  if(tab==='analysis') renderAnalysis();
-}
-
-/* ================= SWIPE NAVIGATION ================= */
-(function attachSwipeNav(){
-  const el = document.getElementById('swipe-area');
-  let startX = 0, startY = 0, startT = 0, tracking = false;
-  el.addEventListener('touchstart', (e) => {
-    if(document.querySelector('.modal-overlay.active')) { tracking = false; return; }
-    if(e.touches.length !== 1) { tracking = false; return; }
-    const t = e.touches[0];
-    startX = t.clientX; startY = t.clientY; startT = Date.now();
-    tracking = true;
-  }, {passive:true});
-  el.addEventListener('touchend', (e) => {
-    if(!tracking) return;
-    tracking = false;
-    if(document.querySelector('.modal-overlay.active')) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - startX;
-    const dy = t.clientY - startY;
-    const dt = Date.now() - startT;
-    const HORIZONTAL_THRESHOLD = 55;
-    if(dt < 700 && Math.abs(dx) > HORIZONTAL_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.4){
-      const activeBtn = document.querySelector('.tab-btn.active');
-      const idx = activeBtn ? TAB_ORDER.indexOf(activeBtn.dataset.tab) : 0;
-      if(dx < 0 && idx < TAB_ORDER.length - 1){ switchTab(TAB_ORDER[idx+1]); }
-      else if(dx > 0 && idx > 0){ switchTab(TAB_ORDER[idx-1]); }
-    }
-  }, {passive:true});
-})();
-
-/* ================= MODALS ================= */
 window.openExpenseModal = function(presetTripId, editId){
   editingExpenseId = editId || null;
   const deleteBtn = document.getElementById('exp-delete-btn');
@@ -1140,7 +1117,7 @@ window.openExpenseModal = function(presetTripId, editId){
 
   if(editingExpenseId){
     const e = findExpenseById(editingExpenseId);
-    if(!e){ showToast('Expense not found'); return; }
+    if(!e){ window.showToast('Expense not found'); return; }
     title.textContent = 'Edit expense';
     saveBtn.textContent = 'Save changes';
     saveBtn.disabled = false;
@@ -1179,7 +1156,8 @@ window.openExpenseModal = function(presetTripId, editId){
     document.getElementById('exp-trip').value = defaultTrip && findTripById(defaultTrip) ? defaultTrip : '';
   }
   document.getElementById('expense-modal').classList.add('active');
-}
+};
+
 window.openTripModal = function(editId){
   editingTripId = editId || null;
   const deleteBtn = document.getElementById('trip-delete-btn');
@@ -1188,7 +1166,7 @@ window.openTripModal = function(editId){
 
   if(editingTripId){
     const t = findTripById(editingTripId);
-    if(!t){ showToast('Trip not found'); return; }
+    if(!t){ window.showToast('Trip not found'); return; }
     title.textContent = 'Edit trip';
     saveBtn.textContent = 'Save changes';
     saveBtn.disabled = false;
@@ -1214,12 +1192,13 @@ window.openTripModal = function(editId){
     renderEmojiPicker();
   }
   document.getElementById('trip-modal').classList.add('active');
-}
+};
+
 window.closeModal = function(id){
   document.getElementById(id).classList.remove('active');
   if(id === 'expense-modal') editingExpenseId = null;
   if(id === 'trip-modal') editingTripId = null;
-}
+};
 
 function renderCatPicker(){
   const box = document.getElementById('exp-cat-picker');
@@ -1227,7 +1206,7 @@ function renderCatPicker(){
     `<div class="cat-chip ${selectedCat===c.key?'sel':''}" onclick="pickCat('${c.key}')">${c.emoji} ${c.label}</div>`
   ).join('');
 }
-window.pickCat = function(key){ selectedCat = key; renderCatPicker(); }
+window.pickCat = function(key){ selectedCat = key; renderCatPicker(); };
 
 function renderPayPicker(){
   const box = document.getElementById('exp-pay-picker');
@@ -1235,7 +1214,7 @@ function renderPayPicker(){
     `<div class="cat-chip ${selectedPay===p.key?'sel':''}" onclick="pickPay('${p.key}')">${p.emoji} ${p.label}</div>`
   ).join('');
 }
-window.pickPay = function(key){ selectedPay = key; renderPayPicker(); }
+window.pickPay = function(key){ selectedPay = key; renderPayPicker(); };
 
 function renderTypePicker(){
   const box = document.getElementById('exp-type-picker');
@@ -1243,7 +1222,7 @@ function renderTypePicker(){
     `<div class="cat-chip ${selectedType===t.key?'sel':''}" onclick="pickType('${t.key}')">${t.emoji} ${t.label}</div>`
   ).join('') + `<div style="width:100%; font-size:11.5px; color:var(--ink-soft); margin-top:2px;">Big one-time expenses (rent, fees…) stay in your totals but are left out of the daily analysis trends by default.</div>`;
 }
-window.pickType = function(key){ selectedType = key; renderTypePicker(); }
+window.pickType = function(key){ selectedType = key; renderTypePicker(); };
 
 function renderEmojiPicker(){
   const box = document.getElementById('trip-emoji-picker');
@@ -1251,7 +1230,7 @@ function renderEmojiPicker(){
     `<div class="emoji-opt ${selectedEmoji===e?'sel':''}" onclick="pickEmoji('${e}')">${e}</div>`
   ).join('');
 }
-window.pickEmoji = function(e){ selectedEmoji = e; renderEmojiPicker(); }
+window.pickEmoji = function(e){ selectedEmoji = e; renderEmojiPicker(); };
 
 function populateTripSelect(sel){
   const cur = sel.value;
@@ -1260,11 +1239,11 @@ function populateTripSelect(sel){
   if(cur) sel.value = cur;
 }
 
-/* ================= ACTIONS: EXPENSE ================= */
+/* ================= ACTIONS ================= */
 window.saveExpense = async function(){
-  if(isSavingExpense) return; // guard against double-tap / double-submit
+  if(isSavingExpense) return; 
   const amount = parseFloat(document.getElementById('exp-amount').value);
-  if(!amount || amount<=0){ showToast('Enter a valid amount'); return; }
+  if(!amount || amount<=0){ window.showToast('Enter a valid amount'); return; }
   const category = selectedCat || 'other';
   const paymentMode = selectedPay || 'upi';
   const expenseType = selectedType || 'daily';
@@ -1278,10 +1257,9 @@ window.saveExpense = async function(){
   setLastTripId(tripId || '');
 
   if(editingExpenseId){
-    // ---- EDIT existing expense (optimistic, immediate) ----
     const id = editingExpenseId;
-    closeModal('expense-modal');
-    showToast('Expense updated');
+    window.closeModal('expense-modal');
+    window.showToast('Expense updated');
 
     if(dataSource === 'cloud' && currentUser){
       const idx = window.state.expenses.findIndex(e => e.id === id);
@@ -1299,7 +1277,7 @@ window.saveExpense = async function(){
         await updateDoc(doc(db, "users", currentUser.uid, "expenses", id), payload);
       }catch(e){
         if(prevData && idx > -1){ window.state.expenses[idx] = prevData; sortExpensesArr(window.state.expenses); refreshCurrentTab(); }
-        showToast('Could not save changes — check connection');
+        window.showToast('Could not save changes — check connection');
       }
     } else {
       const idx = window.state.expenses.findIndex(e => e.id === id);
@@ -1311,38 +1289,37 @@ window.saveExpense = async function(){
       refreshCurrentTab();
     }
   } else {
-    // ---- ADD new expense (optimistic, immediate) ----
     if(dataSource === 'cloud' && currentUser){
       const clientId = genId();
       const optimistic = { id: 'pending_' + clientId, clientId, ...payload, _pending: true };
       pendingExpenses.unshift(optimistic);
-      closeModal('expense-modal');
-      showToast('Expense saved');
+      window.closeModal('expense-modal');
+      window.showToast('Expense saved');
       refreshCurrentTab();
 
       addDoc(collection(db, "users", currentUser.uid, "expenses"), { ...payload, clientId })
         .catch(() => {
           pendingExpenses = pendingExpenses.filter(e => e.clientId !== clientId);
           refreshCurrentTab();
-          showToast('Could not save — check connection');
+          window.showToast('Could not save — check connection');
         });
     } else {
       window.state.expenses.unshift({ id: genId(), ...payload });
       sortExpensesArr(window.state.expenses);
       saveLocalExpenses();
-      closeModal('expense-modal');
-      showToast('Expense saved');
+      window.closeModal('expense-modal');
+      window.showToast('Expense saved');
       refreshCurrentTab();
     }
   }
   isSavingExpense = false;
-}
+};
 
 window.deleteExpenseFromModal = async function(){
   if(!editingExpenseId) return;
   if(!confirm('Delete this expense? This cannot be undone.')) return;
   const id = editingExpenseId;
-  closeModal('expense-modal');
+  window.closeModal('expense-modal');
 
   if(dataSource === 'cloud' && currentUser){
     const idx = window.state.expenses.findIndex(e => e.id === id);
@@ -1350,26 +1327,25 @@ window.deleteExpenseFromModal = async function(){
     if(idx > -1){ removed = window.state.expenses[idx]; removedIdx = idx; window.state.expenses.splice(idx,1); }
     else { pendingExpenses = pendingExpenses.filter(e => e.id !== id); }
     refreshCurrentTab();
-    showToast('Expense deleted');
+    window.showToast('Expense deleted');
     try{
       await deleteDoc(doc(db, "users", currentUser.uid, "expenses", id));
     }catch(e){
       if(removed){ window.state.expenses.splice(removedIdx,0,removed); sortExpensesArr(window.state.expenses); refreshCurrentTab(); }
-      showToast('Could not delete — check connection');
+      window.showToast('Could not delete — check connection');
     }
   } else {
     window.state.expenses = window.state.expenses.filter(e => e.id !== id);
     saveLocalExpenses();
-    showToast('Expense deleted');
+    window.showToast('Expense deleted');
     refreshCurrentTab();
   }
-}
+};
 
-/* ================= ACTIONS: TRIP ================= */
 window.saveTrip = async function(){
-  if(isSavingTrip) return; // guard against double-tap / double-submit
+  if(isSavingTrip) return; 
   const name = document.getElementById('trip-name').value.trim();
-  if(!name){ showToast('Give your trip a name'); return; }
+  if(!name){ window.showToast('Give your trip a name'); return; }
   const start = document.getElementById('trip-start').value;
   const end = document.getElementById('trip-end').value;
   const budget = parseFloat(document.getElementById('trip-budget').value) || 0;
@@ -1378,10 +1354,9 @@ window.saveTrip = async function(){
   isSavingTrip = true;
 
   if(editingTripId){
-    // ---- EDIT existing trip (optimistic, immediate) ----
     const id = editingTripId;
-    closeModal('trip-modal');
-    showToast('Trip updated');
+    window.closeModal('trip-modal');
+    window.showToast('Trip updated');
 
     if(dataSource === 'cloud' && currentUser){
       const idx = window.state.trips.findIndex(t => t.id === id);
@@ -1398,7 +1373,7 @@ window.saveTrip = async function(){
         await updateDoc(doc(db, "users", currentUser.uid, "trips", id), payload);
       }catch(e){
         if(prevData && idx > -1){ window.state.trips[idx] = prevData; refreshCurrentTab(); }
-        showToast('Could not save changes — check connection');
+        window.showToast('Could not save changes — check connection');
       }
     } else {
       const idx = window.state.trips.findIndex(t => t.id === id);
@@ -1406,37 +1381,36 @@ window.saveTrip = async function(){
       refreshCurrentTab();
     }
   } else {
-    // ---- ADD new trip (optimistic, immediate) ----
     if(dataSource === 'cloud' && currentUser){
       const clientId = genId();
       const optimistic = { id: 'pending_' + clientId, clientId, ...payload, _pending: true };
       pendingTrips.unshift(optimistic);
-      closeModal('trip-modal');
-      showToast('Trip created');
+      window.closeModal('trip-modal');
+      window.showToast('Trip created');
       refreshCurrentTab();
 
       addDoc(collection(db, "users", currentUser.uid, "trips"), { ...payload, clientId })
         .catch(() => {
           pendingTrips = pendingTrips.filter(t => t.clientId !== clientId);
           refreshCurrentTab();
-          showToast('Could not create trip — check connection');
+          window.showToast('Could not create trip — check connection');
         });
     } else {
       window.state.trips.unshift({ id: genId(), ...payload });
       saveLocalTrips();
-      closeModal('trip-modal');
-      showToast('Trip created');
+      window.closeModal('trip-modal');
+      window.showToast('Trip created');
       refreshCurrentTab();
     }
   }
   isSavingTrip = false;
-}
+};
 
 window.deleteTripFromModal = async function(){
   if(!editingTripId) return;
   if(!confirm('Delete this trip? Expenses in it will stay as Personal.')) return;
   const id = editingTripId;
-  closeModal('trip-modal');
+  window.closeModal('trip-modal');
 
   if(dataSource === 'cloud' && currentUser){
     const uid = currentUser.uid;
@@ -1446,45 +1420,43 @@ window.deleteTripFromModal = async function(){
     else { pendingTrips = pendingTrips.filter(t => t.id !== id); }
     window.state.expenses = window.state.expenses.map(e => e.tripId === id ? { ...e, tripId: null } : e);
     refreshCurrentTab();
-    showToast('Trip deleted');
+    window.showToast('Trip deleted');
     try{
       const batch = writeBatch(db);
       batch.delete(doc(db, "users", uid, "trips", id));
-      window.state.expenses.filter(e => e.tripId === null).forEach(() => {}); // no-op guard
-      // clear tripId on any still-linked cloud docs (in case snapshot hasn't caught up)
-      (await getExpensesLinkedTo(uid, id)).forEach(e => {
+      (await getExpensesLinkedTo(id)).forEach(e => {
         batch.update(doc(db, "users", uid, "expenses", e.id), { tripId: null });
       });
       await batch.commit();
     }catch(e){
       if(removed){ window.state.trips.splice(removedIdx,0,removed); refreshCurrentTab(); }
-      showToast('Could not delete trip — check connection');
+      window.showToast('Could not delete trip — check connection');
     }
   } else {
     window.state.trips = window.state.trips.filter(t => t.id !== id);
     window.state.expenses = window.state.expenses.map(e => e.tripId === id ? { ...e, tripId: null } : e);
     saveLocalTrips();
     saveLocalExpenses();
-    showToast('Trip deleted');
+    window.showToast('Trip deleted');
     refreshCurrentTab();
   }
-}
-async function getExpensesLinkedTo(uid, tripId){
-  // Use current in-memory snapshot rather than an extra query — good enough since
-  // onSnapshot keeps window.state.expenses fresh.
+};
+
+async function getExpensesLinkedTo(tripId){
   return window.state.expenses.filter(e => e.tripId === tripId);
 }
 
 function refreshCurrentTab(){
-  if(!appDataReady) return;
+  if(!window.appDataReady) return;
   const activeBtn = document.querySelector('.tab-btn.active');
   const active = activeBtn ? activeBtn.dataset.tab : 'overview';
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-  document.getElementById('view-'+active).classList.add('active');
+  const target = document.getElementById('view-'+active);
+  if(target) target.classList.add('active');
   if(active==='overview') renderOverview();
   if(active==='trips') renderTripsList();
-  if(active==='expenses') renderExpensesList();
-  if(active==='analysis') renderAnalysis();
+  if(active==='expenses') window.renderExpensesList();
+  if(active==='analysis') window.renderAnalysis();
 }
 
 /* ================= RENDERING ================= */
@@ -1550,6 +1522,7 @@ function tripCardHtml(t){
       <div class="pass-add-link" onclick="event.stopPropagation(); openExpenseModal('${t.id}')">+ Add expense to this trip</div>
     </div>`;
 }
+
 function renderTripsList(){
   const box = document.getElementById('trips-list');
   const trips = allTrips();
@@ -1559,13 +1532,14 @@ function renderTripsList(){
   }
   box.innerHTML = trips.map(t=>tripCardHtml(t)).join('');
 }
+
 window.viewTripExpenses = function(tripId){
-  switchTab('expenses');
+  window.switchTab('expenses');
   groupByTrip = false;
   updateGroupToggleUI();
   document.getElementById('filter-trip').value = tripId;
-  renderExpensesList();
-}
+  window.renderExpensesList();
+};
 
 function ticketHtml(e){
   const c = catInfo(e.category);
@@ -1585,6 +1559,7 @@ function ticketHtml(e){
       <div class="amt">${fmt(e.amount)}</div>
     </div>`;
 }
+
 function populateFilters(){
   const tripSel = document.getElementById('filter-trip');
   const curTrip = tripSel.value;
@@ -1598,14 +1573,18 @@ function populateFilters(){
     CATEGORIES.map(c=>`<option value="${c.key}">${c.emoji} ${c.label}</option>`).join('');
   catSel.value = curCat || '';
 }
+
 window.toggleGroupByTrip = function(){
   groupByTrip = !groupByTrip;
   updateGroupToggleUI();
-  renderExpensesList();
-}
+  window.renderExpensesList();
+};
+
 function updateGroupToggleUI(){
-  document.getElementById('group-toggle-btn').classList.toggle('active', groupByTrip);
+  const btn = document.getElementById('group-toggle-btn');
+  if(btn) btn.classList.toggle('active', groupByTrip);
 }
+
 window.renderExpensesList = function(){
   populateFilters();
   const tripFilter = document.getElementById('filter-trip').value;
@@ -1630,7 +1609,6 @@ window.renderExpensesList = function(){
     return;
   }
 
-  // Grouped-by-trip rendering
   const trips = allTrips();
   const groups = [];
   trips.forEach(t=>{
@@ -1645,7 +1623,7 @@ window.renderExpensesList = function(){
     return `<div class="group-header"><span>${g.label} · ${g.items.length}</span><span class="gh-total">${fmt(groupTotal)}</span></div>` +
       g.items.map(e=>ticketHtml(e)).join('');
   }).join('');
-}
+};
 
 /* ================= ANALYSIS ================= */
 function destroyChart(key){ if(charts[key]){ charts[key].destroy(); delete charts[key]; } }
@@ -1657,19 +1635,19 @@ function populateAnalysisTripFilter(){
     allTrips().map(t=>`<option value="${t.id}">${t.icon} ${escapeHtml(t.name)}</option>`).join('');
   sel.value = cur || '';
 }
+
 window.toggleAnalysisBig = function(){
   analysisIncludeBig = !analysisIncludeBig;
   document.getElementById('an-big-toggle').classList.toggle('active', analysisIncludeBig);
-  renderAnalysis();
-}
+  window.renderAnalysis();
+};
 
-function renderAnalysis(){
+window.renderAnalysis = function(){
   populateAnalysisTripFilter();
   const tripFilter = document.getElementById('an-filter-trip').value;
   const allExp = allExpenses();
   const trips = allTrips();
 
-  // Scope by selected trip (or personal / everything)
   let scoped = allExp;
   if(tripFilter === 'none') scoped = allExp.filter(e=>!e.tripId);
   else if(tripFilter) scoped = allExp.filter(e=>e.tripId===tripFilter);
@@ -1677,7 +1655,6 @@ function renderAnalysis(){
   const bigItems = scoped.filter(e=>isBig(e));
   const trendItems = analysisIncludeBig ? scoped : scoped.filter(e=>!isBig(e));
 
-  // ---- Stat tiles ----
   const dailyTotal = trendItems.reduce((s,e)=>s+e.amount,0);
   const distinctDays = new Set(trendItems.map(e=>e.date).filter(Boolean)).size;
   const dailyAvg = distinctDays > 0 ? dailyTotal / distinctDays : 0;
@@ -1688,7 +1665,6 @@ function renderAnalysis(){
   document.getElementById('an-stat-cash').textContent = fmt(cashTotal);
   document.getElementById('an-stat-upi').textContent = fmt(upiTotal);
 
-  // ---- Category breakdown ----
   destroyChart('cat');
   const byCat = CATEGORIES.map(c=>({
     ...c,
@@ -1713,7 +1689,6 @@ function renderAnalysis(){
     }
   });
 
-  // ---- Cash vs UPI ----
   destroyChart('paymode');
   const ctxPay = document.getElementById('chart-paymode').getContext('2d');
   const payHasData = (cashTotal + upiTotal) > 0;
@@ -1734,7 +1709,6 @@ function renderAnalysis(){
     }
   });
 
-  // ---- Monthly trend ----
   destroyChart('month');
   const monthMap = {};
   trendItems.forEach(e=>{
@@ -1760,7 +1734,6 @@ function renderAnalysis(){
     }
   });
 
-  // ---- Trip comparison, split cash vs UPI (always across all trips regardless of trip filter) ----
   destroyChart('trips');
   const tripPool = analysisIncludeBig ? allExp : allExp.filter(e=>!isBig(e));
   const tripStats = trips.map(t=>{
@@ -1788,7 +1761,6 @@ function renderAnalysis(){
     }
   });
 
-  // ---- Big one-time expenses (kept out of the trend charts by default) ----
   const bigTotal = bigItems.reduce((s,e)=>s+e.amount,0);
   document.getElementById('an-big-total').textContent = fmt(bigTotal);
   const bigListBox = document.getElementById('an-big-list');
@@ -1797,23 +1769,39 @@ function renderAnalysis(){
   } else {
     bigListBox.innerHTML = bigItems.map(e=>ticketHtml(e)).join('');
   }
-}
+};
 
-/* ================= UTILS ================= */
-function showToast(msg){
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(window._toastTimer);
-  window._toastTimer = setTimeout(()=>t.classList.remove('show'), 2000);
-}
-function escapeHtml(str){
-  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-}
+/* ================= SWIPE NAVIGATION ================= */
+(function attachSwipeNav(){
+  const el = document.getElementById('swipe-area');
+  if(!el) return;
+  let startX = 0, startY = 0, startT = 0, tracking = false;
+  el.addEventListener('touchstart', (e) => {
+    if(document.querySelector('.modal-overlay.active')) { tracking = false; return; }
+    if(e.touches.length !== 1) { tracking = false; return; }
+    const t = e.touches[0];
+    startX = t.clientX; startY = t.clientY; startT = Date.now();
+    tracking = true;
+  }, {passive:true});
+  el.addEventListener('touchend', (e) => {
+    if(!tracking) return;
+    tracking = false;
+    if(document.querySelector('.modal-overlay.active')) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    const dt = Date.now() - startT;
+    const HORIZONTAL_THRESHOLD = 55;
+    if(dt < 700 && Math.abs(dx) > HORIZONTAL_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.4){
+      const activeBtn = document.querySelector('.tab-btn.active');
+      const idx = activeBtn ? TAB_ORDER.indexOf(activeBtn.dataset.tab) : 0;
+      if(dx < 0 && idx < TAB_ORDER.length - 1){ window.switchTab(TAB_ORDER[idx+1]); }
+      else if(dx > 0 && idx > 0){ window.switchTab(TAB_ORDER[idx-1]); }
+    }
+  }, {passive:true});
+})();
 
-// Boot: try to render instantly from the last-known cloud cache (no network wait).
-// If there's no cache (first run, or a local-only user), fall back to the skeleton
-// while we wait for local storage / auth+Firestore to resolve.
+/* ================= INITIAL BOOT ================= */
 if(!tryRenderFromCacheImmediately()){
   showAppLoading();
 }
