@@ -156,7 +156,7 @@
     background: var(--white);
     border:1px solid var(--line);
     border-radius: 14px;
-    padding: 12px 14px;
+    padding: 12px 14px 12px 10px;
     margin-bottom: 9px;
     position: relative;
     cursor:pointer;
@@ -253,7 +253,7 @@
     color:var(--teal); padding:10px 16px 15px; cursor:pointer;
   }
 
-  /* ---------- Forms ---------- */
+  /* ---------- Forms & Filters ---------- */
   label{font-size:12.5px; font-weight:600; color:var(--ink-soft); display:block; margin: 10px 0 5px;}
   label:first-of-type{margin-top:0;}
   input, select{
@@ -311,6 +311,9 @@
     padding:8px 14px; border-radius:999px; font-weight:600; font-size:12.5px; cursor:pointer;
   }
   .pill-toggle-row button.active{background:var(--ink); color:var(--paper); border-color:var(--ink);}
+  
+  details summary::-webkit-details-marker { display:none; }
+  details summary { outline: none; }
 
   .pay-tag{
     font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:999px;
@@ -458,22 +461,46 @@
     <div class="section-head" style="margin-top:6px;">
       <h2>All expenses</h2>
     </div>
+
+    <!-- ADVANCED SEARCH & FILTERS -->
+    <input type="text" id="filter-search" placeholder="🔍 Search by name, note, or trip..." oninput="renderExpensesList()" style="margin-bottom: 12px; font-size: 15px;">
+    
+    <details style="margin-bottom: 14px; background: var(--white); padding: 12px; border-radius: 12px; border: 1px solid var(--line);">
+      <summary style="font-size:13px; font-weight:600; color:var(--ink-soft); cursor:pointer; list-style:none;">More Filters (Amount, Date, Trip) ▼</summary>
+      <div style="margin-top: 12px;">
+        <div class="grid2" style="margin-bottom:10px;">
+          <div>
+            <label style="margin-top:0;">Min Amount (₹)</label>
+            <input type="number" id="filter-amt-min" placeholder="0" oninput="renderExpensesList()">
+          </div>
+          <div>
+            <label style="margin-top:0;">Max Amount (₹)</label>
+            <input type="number" id="filter-amt-max" placeholder="Any" oninput="renderExpensesList()">
+          </div>
+        </div>
+        <div class="grid2" style="margin-bottom:12px;">
+          <div><label style="margin-top:0;">From Date</label><input type="date" id="filter-date-from" onchange="renderExpensesList()"></div>
+          <div><label style="margin-top:0;">To Date</label><input type="date" id="filter-date-to" onchange="renderExpensesList()"></div>
+        </div>
+        <div class="filter-row" style="margin-bottom:0;">
+          <select id="filter-trip" onchange="renderExpensesList()"></select>
+          <select id="filter-cat" onchange="renderExpensesList()"></select>
+          <select id="filter-pay" onchange="renderExpensesList()">
+            <option value="">Cash & UPI</option>
+            <option value="cash">💵 Cash only</option>
+            <option value="upi">📱 UPI only</option>
+          </select>
+          <select id="filter-type" onchange="renderExpensesList()">
+            <option value="">Daily & big</option>
+            <option value="daily">📆 Daily only</option>
+            <option value="big">💰 Big only</option>
+          </select>
+        </div>
+      </div>
+    </details>
+
     <div class="pill-toggle-row">
       <button type="button" id="group-toggle-btn" onclick="toggleGroupByTrip()">📂 Group by trip</button>
-    </div>
-    <div class="filter-row">
-      <select id="filter-trip" onchange="renderExpensesList()"></select>
-      <select id="filter-cat" onchange="renderExpensesList()"></select>
-      <select id="filter-pay" onchange="renderExpensesList()">
-        <option value="">Cash & UPI</option>
-        <option value="cash">💵 Cash only</option>
-        <option value="upi">📱 UPI only</option>
-      </select>
-      <select id="filter-type" onchange="renderExpensesList()">
-        <option value="">Daily & big</option>
-        <option value="daily">📆 Daily only</option>
-        <option value="big">💰 Big only</option>
-      </select>
     </div>
     <div id="expenses-list"></div>
   </section>
@@ -749,6 +776,7 @@ const EXPENSE_TYPES = [
   {key:'big', label:'Big one-time', emoji:'💰'}
 ];
 const TRIP_EMOJIS = ['✈️','🏖️','⛰️','🚗','🎒','🌆','🏕️','🚆'];
+const TRIP_COLORS = ['#FF6B5B', '#F5A623', '#7C5CBF', '#12877D', '#E966A0', '#3A6EA5', '#D64550', '#8A8471', '#0B6B62', '#1E2749'];
 const TAB_ORDER = ['overview','trips','expenses','analysis'];
 
 /* ================= HELPER FUNCTIONS ================= */
@@ -789,6 +817,14 @@ function sortExpensesArr(list){
 }
 function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function getTripColor(tripId){
+  if(!tripId) return 'var(--line)'; // Default color for personal/no-trip
+  let hash = 0;
+  for(let i=0; i<tripId.length; i++){
+    hash = tripId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return TRIP_COLORS[Math.abs(hash) % TRIP_COLORS.length];
 }
 
 /* ================= DISPLAY-LIST HELPERS ================= */
@@ -1496,10 +1532,11 @@ function tripCardHtml(t){
   const over = t.budget>0 && spent>t.budget;
   const dateStr = (t.start||t.end) ? `${t.start||'?'} → ${t.end||'?'}` : 'No dates set';
   const pendingCls = t._pending ? ' pending' : '';
+  const headerColor = getTripColor(t.id);
   return `
     <div class="pass${pendingCls}">
       <div class="pass-top">
-        <div class="emoji" onclick="viewTripExpenses('${t.id}')">${t.icon}</div>
+        <div class="emoji" style="background: ${headerColor};" onclick="viewTripExpenses('${t.id}')">${t.icon}</div>
         <div class="name-wrap" onclick="viewTripExpenses('${t.id}')">
           <div class="name">${escapeHtml(t.name)}</div>
           <div class="dates">${dateStr} · ${count} expense${count===1?'':'s'}</div>
@@ -1548,8 +1585,10 @@ function ticketHtml(e){
   const timeStr = e.time ? fmtTime12(e.time) : '';
   const pendingCls = e._pending ? ' pending' : '';
   const bigTag = isBig(e) ? `<span class="pay-tag big">💰 Big</span>` : '';
+  const tripColor = getTripColor(e.tripId);
+  
   return `
-    <div class="ticket${pendingCls}" onclick="openExpenseModal(null,'${e.id}')">
+    <div class="ticket${pendingCls}" onclick="openExpenseModal(null,'${e.id}')" style="border-left: 5px solid ${tripColor};">
       <div class="icon" style="background:${c.color}22; color:${c.color};">${c.emoji}</div>
       <div class="mid">
         <div class="cat">${c.label}<span class="pay-tag ${e.paymentMode==='cash'?'cash':'upi'}">${p.emoji} ${p.label}</span>${bigTag}</div>
@@ -1587,11 +1626,34 @@ function updateGroupToggleUI(){
 
 window.renderExpensesList = function(){
   populateFilters();
+  const searchQ = document.getElementById('filter-search').value.toLowerCase().trim();
   const tripFilter = document.getElementById('filter-trip').value;
   const catFilter = document.getElementById('filter-cat').value;
   const payFilter = document.getElementById('filter-pay').value;
   const typeFilter = document.getElementById('filter-type').value;
+  const amtMin = parseFloat(document.getElementById('filter-amt-min').value);
+  const amtMax = parseFloat(document.getElementById('filter-amt-max').value);
+  const dFrom = document.getElementById('filter-date-from').value;
+  const dTo = document.getElementById('filter-date-to').value;
+
   let list = [...allExpenses()];
+
+  // Search Filter (Name/Note, Trip Name, Category Label)
+  if(searchQ){
+    list = list.filter(e => 
+      (e.note || '').toLowerCase().includes(searchQ) || 
+      catInfo(e.category).label.toLowerCase().includes(searchQ) ||
+      (findTripById(e.tripId)?.name || '').toLowerCase().includes(searchQ)
+    );
+  }
+
+  // Advanced Filters
+  if(!isNaN(amtMin)) list = list.filter(e => e.amount >= amtMin);
+  if(!isNaN(amtMax)) list = list.filter(e => e.amount <= amtMax);
+  if(dFrom) list = list.filter(e => (e.date || '') >= dFrom);
+  if(dTo) list = list.filter(e => (e.date || '') <= dTo);
+
+  // General Dropdown Filters
   if(tripFilter === 'none') list = list.filter(e=>!e.tripId);
   else if(tripFilter) list = list.filter(e=>e.tripId===tripFilter);
   if(catFilter) list = list.filter(e=>e.category===catFilter);
@@ -1600,7 +1662,7 @@ window.renderExpensesList = function(){
 
   const box = document.getElementById('expenses-list');
   if(list.length===0){
-    box.innerHTML = `<div class="empty"><span class="big">🔍</span>No expenses match this filter.</div>`;
+    box.innerHTML = `<div class="empty"><span class="big">🔍</span>No expenses match your filters.</div>`;
     return;
   }
 
