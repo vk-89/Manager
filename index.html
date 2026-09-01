@@ -501,7 +501,9 @@
 
     <div class="pill-toggle-row">
       <button type="button" id="group-toggle-btn" onclick="toggleGroupByTrip()">📂 Group by trip</button>
+      <button type="button" id="export-csv-btn" onclick="exportExpensesCSV()">⬇️ Export CSV</button>
     </div>
+    <div id="export-count-hint" style="font-size:11.5px; color:var(--ink-soft); margin:-8px 0 14px;"></div>
     <div id="expenses-list"></div>
   </section>
 
@@ -1628,22 +1630,25 @@ function updateGroupToggleUI(){
   if(btn) btn.classList.toggle('active', groupByTrip);
 }
 
-window.renderExpensesList = function(){
-  populateFilters();
+function getFilteredExpenses(){
   const searchQ = document.getElementById('filter-search').value.toLowerCase().trim();
   const tripFilter = document.getElementById('filter-trip').value;
   const catFilter = document.getElementById('filter-cat').value;
   const payFilter = document.getElementById('filter-pay').value;
   const typeFilter = document.getElementById('filter-type').value;
-  const amtMin = parseFloat(document.getElementById('filter-amt-min').value);
-  const amtMax = parseFloat(document.getElementById('filter-amt-max').value);
+  const amtMinRaw = document.getElementById('filter-amt-min').value;
+  const amtMaxRaw = document.getElementById('filter-amt-max').value;
+  const amtMin = parseFloat(amtMinRaw);
+  const amtMax = parseFloat(amtMaxRaw);
   const dFrom = document.getElementById('filter-date-from').value;
   const dTo = document.getElementById('filter-date-to').value;
 
   let list = [...allExpenses()];
+  let filtersActive = false;
 
   // Live Search Filter (Matches Note, Category Name, Trip Name, Amount, and Date)
   if(searchQ){
+    filtersActive = true;
     list = list.filter(e => {
       const tName = findTripById(e.tripId)?.name || 'general expense';
       const catName = catInfo(e.category).label;
@@ -1656,17 +1661,31 @@ window.renderExpensesList = function(){
   }
 
   // Advanced Filters
-  if(!isNaN(amtMin)) list = list.filter(e => e.amount >= amtMin);
-  if(!isNaN(amtMax)) list = list.filter(e => e.amount <= amtMax);
-  if(dFrom) list = list.filter(e => (e.date || '') >= dFrom);
-  if(dTo) list = list.filter(e => (e.date || '') <= dTo);
+  if(amtMinRaw !== '' && !isNaN(amtMin)){ filtersActive = true; list = list.filter(e => e.amount >= amtMin); }
+  if(amtMaxRaw !== '' && !isNaN(amtMax)){ filtersActive = true; list = list.filter(e => e.amount <= amtMax); }
+  if(dFrom){ filtersActive = true; list = list.filter(e => (e.date || '') >= dFrom); }
+  if(dTo){ filtersActive = true; list = list.filter(e => (e.date || '') <= dTo); }
 
   // General Dropdown Filters
-  if(tripFilter === 'none') list = list.filter(e=>!e.tripId);
-  else if(tripFilter) list = list.filter(e=>e.tripId===tripFilter);
-  if(catFilter) list = list.filter(e=>e.category===catFilter);
-  if(payFilter) list = list.filter(e=>(e.paymentMode||'upi')===payFilter);
-  if(typeFilter) list = list.filter(e=>(e.expenseType||'daily')===typeFilter);
+  if(tripFilter === 'none'){ filtersActive = true; list = list.filter(e=>!e.tripId); }
+  else if(tripFilter){ filtersActive = true; list = list.filter(e=>e.tripId===tripFilter); }
+  if(catFilter){ filtersActive = true; list = list.filter(e=>e.category===catFilter); }
+  if(payFilter){ filtersActive = true; list = list.filter(e=>(e.paymentMode||'upi')===payFilter); }
+  if(typeFilter){ filtersActive = true; list = list.filter(e=>(e.expenseType||'daily')===typeFilter); }
+
+  return { list, filtersActive };
+}
+
+window.renderExpensesList = function(){
+  populateFilters();
+  const { list, filtersActive } = getFilteredExpenses();
+
+  const hint = document.getElementById('export-count-hint');
+  if(hint){
+    hint.textContent = filtersActive
+      ? `${list.length} expense${list.length===1?'':'s'} match your filters — export will include exactly these.`
+      : `${list.length} expense${list.length===1?'':'s'} total — no filters applied, export will include everything.`;
+  }
 
   const box = document.getElementById('expenses-list');
   if(list.length===0){
@@ -1693,6 +1712,55 @@ window.renderExpensesList = function(){
     return `<div class="group-header"><span>${g.label} · ${g.items.length}</span><span class="gh-total">${fmt(groupTotal)}</span></div>` +
       g.items.map(e=>ticketHtml(e)).join('');
   }).join('');
+};
+
+/* ================= CSV EXPORT ================= */
+function csvEscape(val){
+  const s = String(val === null || val === undefined ? '' : val);
+  if(/[",\n\r]/.test(s)){
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+window.exportExpensesCSV = function(){
+  const { list } = getFilteredExpenses();
+  if(list.length === 0){
+    window.showToast('No expenses to export');
+    return;
+  }
+
+  const headers = ['Date','Time','Amount (INR)','Category','Payment Mode','Type','Trip','Note'];
+  const rows = list.map(e => {
+    const trip = findTripById(e.tripId);
+    return [
+      e.date || '',
+      e.time ? fmtTime12(e.time) : '',
+      e.amount,
+      catInfo(e.category).label,
+      payInfo(e.paymentMode || 'upi').label,
+      typeInfo(e.expenseType || 'daily').label,
+      trip ? trip.name : 'Personal',
+      e.note || ''
+    ];
+  });
+
+  // Prepend a UTF-8 BOM so ₹ and other characters render correctly in Excel
+  const csvBody = [headers, ...rows].map(r => r.map(csvEscape).join(',')).join('\r\n');
+  const csvContent = '\uFEFF' + csvBody;
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = todayStr();
+  a.href = url;
+  a.download = `ledger-expenses-${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  window.showToast(`Exported ${list.length} expense${list.length===1?'':'s'}`);
 };
 
 /* ================= ANALYSIS ================= */
