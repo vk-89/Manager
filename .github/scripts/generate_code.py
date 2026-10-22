@@ -15,6 +15,7 @@ def main():
     with open(file_path, "r", encoding="utf-8") as f:
         current_code = f.read()
 
+    # FIXED: Properly closed the f-string and included the issue details
     prompt = f"""
 You are an expert web developer. You are updating a single-file web application for a user.
 Here is the current code of the application:
