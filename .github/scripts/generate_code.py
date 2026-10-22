@@ -32,7 +32,6 @@ CRITICAL RULES:
 3. Do NOT truncate the code or use placeholders like <!-- rest of code -->.
 """
 
-    # Using the exact model name from your AI Studio dashboard
     model = genai.GenerativeModel("gemini-3.6-flash")
     response = model.generate_content(prompt)
     
