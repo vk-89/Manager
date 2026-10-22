@@ -32,7 +32,8 @@ CRITICAL RULES:
 3. Do NOT truncate the code or use placeholders like <!-- rest of code -->.
 """
 
-    model = genai.GenerativeModel("gemini-3.6-flash")
+    # Updated to exactly what the API error requested
+    model = genai.GenerativeModel("gemini-3.8-flash")
     response = model.generate_content(prompt)
     
     new_code = response.text.strip()
