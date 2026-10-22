@@ -171,7 +171,7 @@
   }
   .ticket .mid{flex:1; min-width:0;}
   .ticket .mid .cat{font-weight:600; font-size:13.5px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
-  .ticket .mid .note{font-size:11.5px; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px;}
+  .ticket .mid .note{font-size:11.5px; color:var(--ink-soft); white-space:normal; margin-top:2px;}
   .ticket .leader{
     flex:1; border-bottom: 2px dotted var(--line); margin: 0 2px; min-width:8px;
   }
@@ -433,12 +433,6 @@
         <div class="value mono" id="stat-month">₹0</div>
       </div>
     </div>
-
-    <div class="section-head">
-      <h2>Active trips</h2>
-      <a class="link" onclick="switchTab('trips')">See all →</a>
-    </div>
-    <div id="overview-trips"></div>
 
     <div class="section-head">
       <h2>Recent expenses</h2>
@@ -819,6 +813,17 @@ function sortExpensesArr(list){
 }
 function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function formatDisplayDate(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const year = parts[0];
+  const monthIndex = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  if (isNaN(day) || monthIndex < 0 || monthIndex > 11) return dateStr;
+  return day + ' ' + months[monthIndex] + ' ' + year;
 }
 function getTripColor(tripId){
   if(!tripId) return 'var(--line)'; // Default color for personal/no-trip
@@ -1500,19 +1505,11 @@ function refreshCurrentTab(){
 /* ================= RENDERING ================= */
 function renderOverview(){
   const expenses = allExpenses();
-  const trips = allTrips();
   const total = expenses.reduce((s,e)=>s+e.amount,0);
   const month = todayStr().slice(0,7);
   const monthTotal = expenses.filter(e=>e.date && e.date.slice(0,7)===month).reduce((s,e)=>s+e.amount,0);
   document.getElementById('stat-total').textContent = fmt(total);
   document.getElementById('stat-month').textContent = fmt(monthTotal);
-
-  const tripsBox = document.getElementById('overview-trips');
-  if(trips.length===0){
-    tripsBox.innerHTML = `<div class="empty"><span class="big">🧳</span>No trips yet. Create one to start grouping expenses.</div>`;
-  } else {
-    tripsBox.innerHTML = trips.slice(0,2).map(t=>tripCardHtml(t)).join('');
-  }
 
   const recentBox = document.getElementById('overview-recent');
   const recent = expenses.slice(0,5);
@@ -1598,7 +1595,7 @@ function ticketHtml(e){
       <div class="icon" style="background:${c.color}22; color:${c.color};" title="${c.label}">${c.emoji}</div>
       <div class="mid">
         <div class="cat">${tripIcon} ${tripDisplayName} <span class="pay-tag ${e.paymentMode==='cash'?'cash':'upi'}">${p.emoji} ${p.label}</span></div>
-        <div class="note">${c.label}${e.note ? ' · ' + escapeHtml(e.note) : ''}${bigIndicator} · ${e.date || ''}${timeStr ? ' ' + timeStr : ''}</div>
+        <div class="note">${c.label}${e.note ? ' · ' + escapeHtml(e.note) : ''}${bigIndicator} · ${formatDisplayDate(e.date)}${timeStr ? ' ' + timeStr : ''}</div>
       </div>
       <div class="leader"></div>
       <div class="amt">${fmt(e.amount)}</div>
