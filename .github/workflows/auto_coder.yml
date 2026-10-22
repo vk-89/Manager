@@ -18,10 +18,10 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install Gemini SDK
-        run: pip install google-generativeai
+        run: pip install google-genai
 
       - name: Generate New Code
         env:
