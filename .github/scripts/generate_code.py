@@ -1,10 +1,10 @@
 import os
 import re
-import google.generativeai as genai
+from google import genai
 
 def main():
     api_key = os.environ.get("GEMINI_API_KEY")
-    genai.configure(api_key=api_key)
+    client = genai.Client(api_key=api_key)
 
     issue_title = os.environ.get("ISSUE_TITLE", "")
     issue_body = os.environ.get("ISSUE_BODY", "")
@@ -32,8 +32,10 @@ CRITICAL RULES:
 3. Do NOT truncate the code or use placeholders like <!-- rest of code -->.
 """
 
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model="gemini-3.8-flash",
+        contents=prompt
+    )
     
     new_code = response.text.strip()
     
