@@ -1,10 +1,10 @@
 import os
 import re
-from google import genai
+import google.generativeai as genai
 
 def main():
     api_key = os.environ.get("GEMINI_API_KEY")
-    client = genai.Client(api_key=api_key)
+    genai.configure(api_key=api_key)
 
     issue_title = os.environ.get("ISSUE_TITLE", "")
     issue_body = os.environ.get("ISSUE_BODY", "")
@@ -32,10 +32,9 @@ CRITICAL RULES:
 3. Do NOT truncate the code or use placeholders like <!-- rest of code -->.
 """
 
-    response = client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents=prompt
-    )
+    # Using the exact model name from your AI Studio dashboard
+    model = genai.GenerativeModel("gemini-3.6-flash")
+    response = model.generate_content(prompt)
     
     new_code = response.text.strip()
     
